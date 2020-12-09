@@ -8,11 +8,12 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 || os.Args[1] != "migrate" {
-		usage()
-	}
+	cmd := parseCmd(os.Args)
 
-	envName := os.Args[2]
+	if !cmd.valid {
+		println(cmd.usage())
+		os.Exit(0)
+	}
 
 	config, err := newConfig()
 
@@ -26,7 +27,7 @@ func main() {
 		fatalError("couldn't create elasticsearch client: %v", err)
 	}
 
-	schema, err := getSchema(config, envName)
+	schema, err := getSchema(config, cmd.envName)
 
 	if err != nil {
 		fatalError("couldn't get schema: %v", err)
@@ -37,7 +38,7 @@ func main() {
 		es:     es,
 	}
 
-	plan, err := makePlan(es, config.preprocess, changelog, schema, envName)
+	plan, err := makePlan(es, config.preprocess, changelog, schema, cmd.envName)
 
 	if err != nil {
 		fatalError("couldn't plan update: %v", err)
@@ -49,13 +50,15 @@ func main() {
 		os.Exit(0)
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("\nConfirm [Y/n]: ")
-	text, _ := reader.ReadString('\n')
+	if !cmd.approve {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("\nConfirm [Y/n]: ")
+		text, _ := reader.ReadString('\n')
 
-	if strings.ToLower(text) != "y\n" {
-		println("Cancelled")
-		os.Exit(0)
+		if strings.ToLower(text) != "y\n" {
+			println("Cancelled")
+			os.Exit(0)
+		}
 	}
 
 	for _, item := range plan {
@@ -65,11 +68,6 @@ func main() {
 	}
 
 	println("Complete")
-}
-
-func usage() {
-	println(fmt.Sprintf("Usage: %v migrate ENVIRONMENT", os.Args[0]))
-	os.Exit(0)
 }
 
 func logPlan(plan []planAction) {
