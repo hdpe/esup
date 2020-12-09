@@ -1,11 +1,12 @@
 package main
 
 import (
+	"fmt"
 	viperlib "github.com/spf13/viper"
 	"strings"
 )
 
-func newConfig() Config {
+func newConfig() (Config, error) {
 	viper := viperlib.New()
 	viper.SetDefault("server.address", "http://localhost:9200")
 	viper.SetDefault("changelog.index", "esup-changelog0")
@@ -13,8 +14,15 @@ func newConfig() Config {
 	viper.SetDefault("indexSets.directory", "./indexSets")
 	viper.SetDefault("preprocess.includesDirectory", "./includes")
 
-	viper.SetConfigType("yaml")
-	viper.SetConfigFile("esup.config")
+	viper.SetConfigType("yml")
+	viper.SetConfigName("esup.config")
+	viper.AddConfigPath(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viperlib.ConfigFileNotFoundError); !ok {
+			return Config{}, fmt.Errorf("couldn't read esup.config.yml: %w", err)
+		}
+	}
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
@@ -22,12 +30,13 @@ func newConfig() Config {
 	return Config{
 		ServerConfig{
 			address: viper.GetString("server.address"),
+			apiKey:  viper.GetString("server.apiKey"),
 		},
 		ChangelogConfig{index: viper.GetString("changelog.index")},
 		IndexSetsConfig{directory: viper.GetString("indexSets.directory")},
 		PipelinesConfig{directory: viper.GetString("pipelines.directory")},
 		PreprocessConfig{includesDirectory: viper.GetString("preprocess.includesDirectory")},
-	}
+	}, nil
 }
 
 type Config struct {

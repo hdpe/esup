@@ -14,7 +14,11 @@ func main() {
 
 	envName := os.Args[2]
 
-	config := newConfig()
+	config, err := newConfig()
+
+	if err != nil {
+		fatalError("couldn't read configuration: %v", err)
+	}
 
 	es, err := newES(config.server)
 

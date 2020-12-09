@@ -13,9 +13,26 @@ import (
 )
 
 func newES(serverConfig ServerConfig) (*ES, error) {
+	apiKey := serverConfig.apiKey
+	if apiKey != "" {
+		if !gjson.Valid(apiKey) {
+			return nil, fmt.Errorf("illegal API key: expected JSON API key, not %v", apiKey)
+		}
+
+		parsed := gjson.Parse(apiKey)
+
+		var err error
+		apiKey, err = base64enc(fmt.Sprintf("%v:%v", parsed.Get("id").String(),
+			parsed.Get("api_key").String()))
+
+		if err != nil {
+			return nil, fmt.Errorf("illegal API key: %w", err)
+		}
+	}
+
 	clientConfig := elasticsearch.Config{
 		Addresses: []string{serverConfig.address},
-		APIKey:    serverConfig.apiKey,
+		APIKey:    apiKey,
 	}
 
 	client, err := elasticsearch.NewClient(clientConfig)
