@@ -1,0 +1,20 @@
+language: go
+go: 
+  - "1.15.x"
+branches:
+  except:
+    - /^untagged/
+script:
+  - go test
+  - CGO_ENABLED=0 go build -o linux/amd64/esup
+  - tar cf esup-linux-amd64.tar linux/amd64/esup
+  - GOOS=darwin GOARCH=amd64 go build -o darwin/amd64/esup
+  - tar cf esup-darwin-amd64.tar darwin/amd64/esup
+deploy:
+  provider: releases
+  api_key: $GITHUB_TOKEN
+  file:
+    - esup-linux-amd64.tar
+    - esup-darwin-amd64.tar
+  skip_cleanup: true
+  draft: true
