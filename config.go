@@ -32,6 +32,7 @@ func newConfig() (Config, error) {
 			address: viper.GetString("server.address"),
 			apiKey:  viper.GetString("server.apiKey"),
 		},
+		PrototypeConfig{environment: viper.GetString("prototype.environment")},
 		ChangelogConfig{index: viper.GetString("changelog.index")},
 		IndexSetsConfig{directory: viper.GetString("indexSets.directory")},
 		PipelinesConfig{directory: viper.GetString("pipelines.directory")},
@@ -41,6 +42,7 @@ func newConfig() (Config, error) {
 
 type Config struct {
 	server     ServerConfig
+	prototype  PrototypeConfig
 	changelog  ChangelogConfig
 	indexSets  IndexSetsConfig
 	pipelines  PipelinesConfig
@@ -50,6 +52,10 @@ type Config struct {
 type ServerConfig struct {
 	address string
 	apiKey  string
+}
+
+type PrototypeConfig struct {
+	environment string
 }
 
 type ChangelogConfig struct {

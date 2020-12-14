@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-func makePlan(es *ES, preprocessConfig PreprocessConfig, changelog *Changelog, schema schema,
-	envName string) ([]planAction, error) {
+func makePlan(es *ES, prototypeConfig PrototypeConfig, preprocessConfig PreprocessConfig, changelog *Changelog,
+	schema schema, envName string) ([]planAction, error) {
 
 	plan := make([]planAction, 0)
 
@@ -14,7 +14,7 @@ func makePlan(es *ES, preprocessConfig PreprocessConfig, changelog *Changelog, s
 		return nil, fmt.Errorf("couldn't get pipeline mutations: %w", err)
 	}
 
-	if err := appendIndexSetMutations(&plan, es, preprocessConfig, changelog, schema.indexSets, envName); err != nil {
+	if err := appendIndexSetMutations(&plan, es, prototypeConfig, preprocessConfig, changelog, schema.indexSets, envName); err != nil {
 		return nil, fmt.Errorf("couldn't get index set mutations: %w", err)
 	}
 
@@ -62,8 +62,8 @@ func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 	return nil
 }
 
-func appendIndexSetMutations(plan *[]planAction, es *ES, preprocessConfig PreprocessConfig, changelog *Changelog,
-	indexSets []indexSet, envName string) error {
+func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig PrototypeConfig,
+	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string) error {
 
 	for _, m := range indexSets {
 		newIndexDef, err := preprocess(m.filePath, preprocessConfig)
@@ -102,6 +102,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 		}
 
 		indexName := newIndexName(m.indexSet, envName)
+		pipeline := newPipelineId(m.meta.reindex.pipeline, envName)
 
 		*plan = append(*plan, &createIndex{
 			es:         es,
@@ -111,6 +112,15 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 		})
 
 		if existingIndices == nil {
+			if e := prototypeConfig.environment; e != "" && e != envName {
+				*plan = append(*plan, &reindex{
+					es:       es,
+					from:     newAliasName(m.indexSet, e),
+					to:       indexName,
+					pipeline: pipeline,
+				})
+			}
+
 			*plan = append(*plan, &createAlias{
 				es:    es,
 				name:  aliasName,
@@ -122,7 +132,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 					es:       es,
 					from:     aliasName,
 					to:       indexName,
-					pipeline: newPipelineId(m.meta.reindex.pipeline, envName),
+					pipeline: pipeline,
 				},
 				&updateAlias{
 					es:         es,
