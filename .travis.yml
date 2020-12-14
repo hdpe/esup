@@ -7,9 +7,9 @@ branches:
 script:
   - go test
   - CGO_ENABLED=0 go build -o linux/amd64/esup
-  - tar cf esup-linux-amd64.tar linux/amd64/esup
+  - tar cf esup-linux-amd64.tar -C linux/amd64 .
   - GOOS=darwin GOARCH=amd64 go build -o darwin/amd64/esup
-  - tar cf esup-darwin-amd64.tar darwin/amd64/esup
+  - tar cf esup-darwin-amd64.tar -C darwin/amd64 .
 deploy:
   provider: releases
   api_key: $GITHUB_TOKEN
