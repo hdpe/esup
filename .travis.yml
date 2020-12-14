@@ -17,4 +17,3 @@ deploy:
     - esup-linux-amd64.tar
     - esup-darwin-amd64.tar
   skip_cleanup: true
-  draft: true
