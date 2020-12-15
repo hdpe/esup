@@ -48,8 +48,8 @@ type ES struct {
 	client *elasticsearch.Client
 }
 
-func (r *ES) getChangelogContent(indexName string, resourceType string, resourceIdentifier string,
-	envName string) (string, error) {
+func (r *ES) getChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
+	envName string) (changelogEntry, error) {
 
 	body := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -83,7 +83,7 @@ func (r *ES) getChangelogContent(indexName string, resourceType string, resource
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
-		return "", fmt.Errorf("couldn't encode JSON request: %w", err)
+		return changelogEntry{}, fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
 	res, err := r.client.Search(func(req *esapi.SearchRequest) {
@@ -93,45 +93,37 @@ func (r *ES) getChangelogContent(indexName string, resourceType string, resource
 	})
 
 	if err != nil {
-		return "", err
+		return changelogEntry{}, err
 	}
 
 	responseBody, err := getBodyAndVerifyResponse(res)
 
 	if err != nil {
-		return "", fmt.Errorf("couldn't get changelog entry: %w", err)
+		return changelogEntry{}, fmt.Errorf("couldn't get changelog entry: %w", err)
 	}
 
-	var parsed map[string]interface{}
-	err = json.NewDecoder(bytes.NewBufferString(responseBody)).Decode(&parsed)
+	_source := gjson.Get(responseBody, "hits.hits.0._source")
 
-	if err != nil {
-		return "", err
+	if !_source.Exists() {
+		return changelogEntry{}, nil
 	}
 
-	if hitsObj, ok := parsed["hits"].(map[string]interface{}); ok {
-		if hits, ok := hitsObj["hits"].([]interface{}); ok && len(hits) == 1 {
-			if hit, ok := hits[0].(map[string]interface{}); ok {
-				if _source, ok := hit["_source"].(map[string]interface{}); ok {
-					if content, ok := _source["content"].(string); ok {
-						return content, nil
-					}
-				}
-			}
-		}
-	}
-
-	return "", nil
+	return changelogEntry{
+		present: true,
+		content: _source.Get("content").String(),
+		meta:    _source.Get("meta").String(),
+	}, nil
 }
 
-func (r *ES) putChangelogContent(indexName string, resourceType string, resourceIdentifier string,
-	finalName string, content string, envName string) error {
+func (r *ES) putChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
+	finalName string, indexDef changelogEntry, envName string) error {
 
 	body := map[string]interface{}{
 		"resource_type":       resourceType,
 		"resource_identifier": resourceIdentifier,
 		"final_name":          finalName,
-		"content":             content,
+		"content":             indexDef.content,
+		"meta":                indexDef.meta,
 		"env_name":            envName,
 		"timestamp":           time.Now().UTC().Format("2006-01-02T15:04:05.006"),
 	}
@@ -221,7 +213,7 @@ func (r *ES) createIndex(index string, mapping string) error {
 	return nil
 }
 
-func (r *ES) reindex(fromIndex string, toIndex string, pipeline string) (string, error) {
+func (r *ES) reindex(fromIndex string, toIndex string, maxDocs int, pipeline string) (string, error) {
 	body := map[string]interface{}{
 		"source": map[string]interface{}{
 			"index": fromIndex,
@@ -240,6 +232,9 @@ func (r *ES) reindex(fromIndex string, toIndex string, pipeline string) (string,
 
 	res, err := r.client.Reindex(&buf, func(request *esapi.ReindexRequest) {
 		request.WaitForCompletion = boolptr(false)
+		if maxDocs != -1 {
+			request.MaxDocs = intptr(maxDocs)
+		}
 	})
 
 	if err != nil {
@@ -505,4 +500,10 @@ type taskStatusFailure struct {
 	id          string
 	causeType   string
 	causeReason string
+}
+
+type changelogEntry struct {
+	present bool
+	content string
+	meta    string
 }

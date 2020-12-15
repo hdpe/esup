@@ -114,13 +114,17 @@ Request body of Elasticsearch [Create index API](https://www.elastic.co/guide/en
 `{indexSetName}-{environment}.meta.yml`
 
 ```yaml
+index: ...
 reindex:
+  maxDocs: ...
   pipeline: ...
 ```
 
 |Key|Type|Description|Default|
 |---|---|---|---|
-|reindex.pipeline|string|ingest pipeline to use in reindexing
+|index|string|statically point the alias at this exact index, instead of managing a timestamped index set 
+|reindex.maxDocs|int|only index this many documents during reindexing: `-1` reindexes all documents|`-1`|
+|reindex.pipeline|string|ingest pipeline to use in reindexing||
 
 
 ### Pipeline
@@ -217,6 +221,7 @@ preprocess:
 |---|---|---|---|---|
 |server.address|SERVER_ADDRESS|string|address of Elasticsearch server|`"http://localhost:9200"`|
 |server.apiKey|SERVER_APIKEY|string|api key for server access||
+|prototype.environment|PROTOTYPE_ENVIRONMENT|string|reindex all new index sets from corresponding index in this environment||
 |indexSets.directory|INDEXSETS_DIRECTORY|string|directory containing index set resources|`"./indexSets"`|
 |pipelines.directory|PIPELINES_DIRECTORY|string|directory containing pipeline resources|`"./pipelines"`|
 |preprocess.includesDirectory|PREPROCESS_INCLUDESDIRECTORY|string|directory containing resource includes|`"./includes"`|

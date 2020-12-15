@@ -18,6 +18,9 @@ const changelogIndexDef = `{
 			"content": {
 				"type": "text"
 			},
+			"meta": {
+				"type": "text"
+			},
 			"timestamp": {
 				"type": "date"
 			}
@@ -30,22 +33,25 @@ type Changelog struct {
 	es     *ES
 }
 
-func (r *Changelog) getCurrentIndexDef(indexSet string, envName string) (string, error) {
+func (r *Changelog) getCurrentChangelogEntry(indexSet string, envName string) (changelogEntry, error) {
 	def, err := r.es.getIndexDef(r.config.index)
 
 	if err != nil {
-		return "", err
+		return changelogEntry{}, err
 	}
 
 	if def == "" {
 		if err = r.es.createIndex(r.config.index, changelogIndexDef); err != nil {
-			return "", err
+			return changelogEntry{}, err
 		}
 	}
 
-	return r.es.getChangelogContent(r.config.index, "index_set", indexSet, envName)
+	return r.es.getChangelogEntry(r.config.index, "index_set", indexSet, envName)
 }
 
-func (r *Changelog) putCurrentIndexDef(indexSet string, finalName string, content string, envName string) error {
-	return r.es.putChangelogContent(r.config.index, "index_set", indexSet, finalName, content, envName)
+func (r *Changelog) putCurrentChangelogEntry(indexSet string, finalName string, indexDef changelogEntry,
+	envName string) error {
+
+	return r.es.putChangelogEntry(r.config.index, "index_set", indexSet, finalName,
+		indexDef, envName)
 }

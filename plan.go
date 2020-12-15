@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 )
 
@@ -66,12 +68,6 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string) error {
 
 	for _, m := range indexSets {
-		newIndexDef, err := preprocess(m.filePath, preprocessConfig)
-
-		if err != nil {
-			return fmt.Errorf("couldn't read %v: %w", m.filePath, err)
-		}
-
 		aliasName := newAliasName(m.indexSet, envName)
 		existingIndices, err := es.getIndicesForAlias(aliasName)
 
@@ -79,46 +75,59 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			return fmt.Errorf("couldn't get alias %v: %w", aliasName, err)
 		}
 
-		existingIndexDef, err := changelog.getCurrentIndexDef(m.indexSet, envName)
+		newIndexDef, err := preprocess(m.filePath, preprocessConfig)
 
 		if err != nil {
-			return fmt.Errorf("couldn't get existing indexSet for %v: %w", aliasName, err)
+			return fmt.Errorf("couldn't read %v: %w", m.filePath, err)
 		}
 
-		if existingIndices == nil && existingIndexDef != "" {
-			return fmt.Errorf("unsupported state: %v not an alias - in fact an index", aliasName)
+		newIndexMeta, err := json.Marshal(m.meta)
+
+		if err != nil {
+			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", m.indexSet, err)
 		}
 
-		if existingIndexDef != "" {
-			changed, err := diff(newIndexDef, existingIndexDef)
+		changelogEntry, err := changelog.getCurrentChangelogEntry(m.indexSet, envName)
 
-			if err != nil {
-				return fmt.Errorf("couldn't diff %v with existing: %w", m.filePath, err)
-			}
+		if err != nil {
+			return fmt.Errorf("couldn't get changelog entry for %v: %w", aliasName, err)
+		}
 
-			if !changed && !planChangesPipeline(*plan, m.meta.reindex.pipeline, envName) {
-				continue
-			}
+		changed, err := indexSetDiff(newIndexDef, string(newIndexMeta), changelogEntry)
+
+		if err != nil {
+			return err
+		}
+
+		if !planChangesPipeline(*plan, m.meta.Reindex.Pipeline, envName) && !changed {
+			continue
 		}
 
 		indexName := newIndexName(m.indexSet, envName)
-		pipeline := newPipelineId(m.meta.reindex.pipeline, envName)
+		pipeline := newPipelineId(m.meta.Reindex.Pipeline, envName)
 
-		*plan = append(*plan, &createIndex{
-			es:         es,
-			name:       indexName,
-			indexSet:   m.indexSet,
-			definition: newIndexDef,
-		})
+		staticIndex := m.meta.Index != ""
+
+		if !staticIndex {
+			*plan = append(*plan, &createIndex{
+				es:         es,
+				name:       indexName,
+				indexSet:   m.indexSet,
+				definition: newIndexDef,
+			})
+		}
 
 		if existingIndices == nil {
-			if e := prototypeConfig.environment; e != "" && e != envName {
-				*plan = append(*plan, &reindex{
-					es:       es,
-					from:     newAliasName(m.indexSet, e),
-					to:       indexName,
-					pipeline: pipeline,
-				})
+			if !staticIndex {
+				if e := prototypeConfig.environment; e != "" && e != envName {
+					*plan = append(*plan, &reindex{
+						es:       es,
+						from:     newAliasName(m.indexSet, e),
+						to:       indexName,
+						maxDocs:  m.meta.Reindex.MaxDocs,
+						pipeline: pipeline,
+					})
+				}
 			}
 
 			*plan = append(*plan, &createAlias{
@@ -127,19 +136,24 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 				index: indexName,
 			})
 		} else {
-			*plan = append(*plan,
-				&reindex{
+			if !staticIndex {
+				*plan = append(*plan, &reindex{
 					es:       es,
 					from:     aliasName,
 					to:       indexName,
+					maxDocs:  m.meta.Reindex.MaxDocs,
 					pipeline: pipeline,
-				},
-				&updateAlias{
+				})
+			}
+
+			if !staticIndex || !reflect.DeepEqual([]string{m.meta.Index}, existingIndices) {
+				*plan = append(*plan, &updateAlias{
 					es:         es,
 					name:       aliasName,
 					newIndex:   indexName,
 					oldIndices: existingIndices,
 				})
+			}
 		}
 
 		*plan = append(*plan, &writeIndexSetChangelogEntry{
@@ -147,6 +161,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			name:       indexName,
 			indexSet:   m.indexSet,
 			definition: newIndexDef,
+			meta:       string(newIndexMeta),
 			envName:    envName,
 		})
 	}
@@ -168,6 +183,30 @@ func newPipelineId(name string, envName string) string {
 	}
 
 	return fmt.Sprintf("%v-%v", envName, name)
+}
+
+func indexSetDiff(newIndexDef string, newIndexMeta string, changelogEntry changelogEntry) (bool, error) {
+	if !changelogEntry.present {
+		return true, nil
+	}
+
+	changed, err := diff(newIndexDef, changelogEntry.content)
+
+	if err != nil {
+		return false, fmt.Errorf("couldn't diff resource content with existing: %w", err)
+	}
+
+	if changed {
+		return true, nil
+	}
+
+	changed, err = diff(newIndexMeta, changelogEntry.meta)
+
+	if err != nil {
+		return false, fmt.Errorf("couldn't diff resource meta with existing: %w", err)
+	}
+
+	return changed, nil
 }
 
 func planChangesPipeline(plan []planAction, pipeline string, envName string) bool {

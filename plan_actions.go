@@ -27,11 +27,13 @@ type writeIndexSetChangelogEntry struct {
 	name       string
 	indexSet   string
 	definition string
+	meta       string
 	envName    string
 }
 
 func (r *writeIndexSetChangelogEntry) execute() error {
-	return r.changelog.putCurrentIndexDef(r.indexSet, r.name, r.definition, r.envName)
+	return r.changelog.putCurrentChangelogEntry(r.indexSet, r.name,
+		changelogEntry{content: r.definition, meta: r.meta}, r.envName)
 }
 
 func (r *writeIndexSetChangelogEntry) String() string {
@@ -42,11 +44,12 @@ type reindex struct {
 	es       *ES
 	from     string
 	to       string
+	maxDocs  int
 	pipeline string
 }
 
 func (r *reindex) execute() error {
-	taskId, err := r.es.reindex(r.from, r.to, r.pipeline)
+	taskId, err := r.es.reindex(r.from, r.to, r.maxDocs, r.pipeline)
 
 	if err != nil {
 		return err
@@ -108,6 +111,9 @@ func (r *reindex) String() string {
 	s := fmt.Sprintf("reindex %v -> %v", r.from, r.to)
 	if r.pipeline != "" {
 		s = fmt.Sprintf("%v via %v", s, r.pipeline)
+	}
+	if r.maxDocs != -1 {
+		s = fmt.Sprintf("%v (%v max docs)", s, r.maxDocs)
 	}
 	return s
 }
