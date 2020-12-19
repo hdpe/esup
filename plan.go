@@ -103,10 +103,17 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			continue
 		}
 
-		indexName := newIndexName(m.indexSet, envName)
-		pipeline := newPipelineId(m.meta.Reindex.Pipeline, envName)
-
 		staticIndex := m.meta.Index != ""
+
+		var indexName string
+
+		if staticIndex {
+			indexName = m.meta.Index
+		} else {
+			indexName = newIndexName(m.indexSet, envName)
+		}
+
+		pipeline := newPipelineId(m.meta.Reindex.Pipeline, envName)
 
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
@@ -146,7 +153,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 				})
 			}
 
-			if !staticIndex || !reflect.DeepEqual([]string{m.meta.Index}, existingIndices) {
+			if !staticIndex || !reflect.DeepEqual([]string{indexName}, existingIndices) {
 				*plan = append(*plan, &updateAlias{
 					es:         es,
 					name:       aliasName,
