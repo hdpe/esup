@@ -151,7 +151,14 @@ No meta parameters supported.
 ## Includes
 
 Simple resource includes are suppported via Go templates 
-and the `include` function. 
+and the `include` function:
+
+```
+{{{ include 'NAME' }}}
+```
+
+We use triple braces `{{{` because double braces are common in
+Elasticsearch ingest processor configuration. 
 Includes are searched for in the `includes` directory
 and expected to have a `.json` extension.
 
@@ -176,7 +183,7 @@ and expected to have a `.json` extension.
     "field1": {
       "type": "text"
     },
-    {{ include "common-fields" }}
+    {{{ include "common-fields" }}}
   }
 }
 ```

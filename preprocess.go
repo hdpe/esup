@@ -9,6 +9,10 @@ import (
 )
 
 func preprocess(filename string, config PreprocessConfig) (string, error) {
+	if filename == "" {
+		return "", nil
+	}
+
 	b, err := ioutil.ReadFile(filename)
 
 	if err != nil {
@@ -31,7 +35,7 @@ func preprocess(filename string, config PreprocessConfig) (string, error) {
 		},
 	}
 
-	tmpl, err := template.New(filename).Funcs(funcMap).Parse(string(b))
+	tmpl, err := template.New(filename).Delims("{{{", "}}}").Funcs(funcMap).Parse(string(b))
 
 	if err != nil {
 		return "", fmt.Errorf("couldn't parse %v: %w", filename, err)
