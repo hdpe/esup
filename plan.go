@@ -126,12 +126,12 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 
 		if existingIndices == nil {
 			if !staticIndex {
-				if e := prototypeConfig.environment; e != "" && e != envName {
+				if e := prototypeConfig.environment; e != "" && e != envName && !m.meta.Prototype.Disabled {
 					*plan = append(*plan, &reindex{
 						es:       es,
 						from:     newAliasName(m.indexSet, e),
 						to:       indexName,
-						maxDocs:  m.meta.Reindex.MaxDocs,
+						maxDocs:  m.meta.Prototype.MaxDocs,
 						pipeline: pipeline,
 					})
 				}
@@ -148,7 +148,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 					es:       es,
 					from:     aliasName,
 					to:       indexName,
-					maxDocs:  m.meta.Reindex.MaxDocs,
+					maxDocs:  -1,
 					pipeline: pipeline,
 				})
 			}

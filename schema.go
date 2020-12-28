@@ -51,10 +51,16 @@ func getIndexSets(config IndexSetsConfig, envName string) ([]indexSet, error) {
 
 	indexSets := make([]indexSet, 0)
 	for _, r := range res {
+		meta, ok := indexSetMetaByIdentifier[r.identifier]
+
+		if !ok {
+			meta = defaultMeta()
+		}
+
 		indexSet := indexSet{
 			indexSet: r.identifier,
 			filePath: r.filePath,
-			meta:     indexSetMetaByIdentifier[r.identifier],
+			meta:     meta,
 		}
 		indexSetsByIdentifier[r.identifier] = indexSet
 		indexSets = append(indexSets, indexSet)
@@ -73,6 +79,8 @@ func getIndexSets(config IndexSetsConfig, envName string) ([]indexSet, error) {
 }
 
 func readMeta(filePath string) (indexSetMeta, error) {
+	meta := defaultMeta()
+
 	viper := viperlib.New()
 	viper.Set("Verbose", true)
 	viper.SetConfigType("yaml")
@@ -80,7 +88,7 @@ func readMeta(filePath string) (indexSetMeta, error) {
 	in, err := os.Open(filePath)
 
 	if err != nil {
-		return indexSetMeta{}, fmt.Errorf("couldn't read %v: %w", filePath, err)
+		return meta, fmt.Errorf("couldn't read %v: %w", filePath, err)
 	}
 
 	defer func() {
@@ -88,34 +96,37 @@ func readMeta(filePath string) (indexSetMeta, error) {
 	}()
 
 	if err = viper.ReadConfig(in); err != nil {
-		return indexSetMeta{}, fmt.Errorf("couldn't read %v: %w", filePath, err)
+		return meta, fmt.Errorf("couldn't read %v: %w", filePath, err)
 	}
 
-	index := viper.GetString("index")
+	meta.Index = viper.GetString("index")
+
+	prototypeConfig := viper.Sub("prototype")
+
+	if meta.Index != "" && prototypeConfig != nil {
+		return meta, fmt.Errorf("can't specify both static index and prototype index configuration")
+	}
+
+	if prototypeConfig != nil {
+		if prototypeConfig.IsSet("maxDocs") {
+			meta.Prototype.MaxDocs = prototypeConfig.GetInt("maxDocs")
+		}
+		if prototypeConfig.IsSet("disabled") {
+			meta.Prototype.Disabled = prototypeConfig.GetBool("disabled")
+		}
+	}
 
 	reindexConfig := viper.Sub("reindex")
 
-	if index != "" && reindexConfig != nil {
-		return indexSetMeta{}, fmt.Errorf("can't specify both static index and reindexing configuration")
+	if meta.Index != "" && reindexConfig != nil {
+		return meta, fmt.Errorf("can't specify both static index and reindexing configuration")
 	}
-
-	var maxDocs = -1
-	var pipeline string
 
 	if reindexConfig != nil {
-		if reindexConfig.IsSet("maxDocs") {
-			maxDocs = reindexConfig.GetInt("maxDocs")
-		}
-		pipeline = reindexConfig.GetString("pipeline")
+		meta.Reindex.Pipeline = reindexConfig.GetString("pipeline")
 	}
 
-	return indexSetMeta{
-		Index: index,
-		Reindex: indexSetMetaReindex{
-			MaxDocs:  maxDocs,
-			Pipeline: pipeline,
-		},
-	}, nil
+	return meta, nil
 }
 
 func getPipelines(config PipelinesConfig, envName string) ([]pipeline, error) {
@@ -137,6 +148,15 @@ func getPipelines(config PipelinesConfig, envName string) ([]pipeline, error) {
 	return pipelines, nil
 }
 
+func defaultMeta() indexSetMeta {
+	return indexSetMeta{
+		Prototype: indexSetMetaPrototype{
+			Disabled: false,
+			MaxDocs:  -1,
+		},
+	}
+}
+
 type schema struct {
 	indexSets []indexSet
 	pipelines []pipeline
@@ -156,11 +176,16 @@ type indexSet struct {
 
 // these fields are exported because we marshal them as JSON for the diff
 type indexSetMeta struct {
-	Index   string
-	Reindex indexSetMetaReindex
+	Index     string
+	Prototype indexSetMetaPrototype
+	Reindex   indexSetMetaReindex
+}
+
+type indexSetMetaPrototype struct {
+	Disabled bool
+	MaxDocs  int
 }
 
 type indexSetMetaReindex struct {
-	MaxDocs  int
 	Pipeline string
 }

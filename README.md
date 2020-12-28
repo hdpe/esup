@@ -115,15 +115,18 @@ Request body of Elasticsearch [Create index API](https://www.elastic.co/guide/en
 
 ```yaml
 index: ...
-reindex:
+prototype:
+  disabled: ...
   maxDocs: ...
+reindex:
   pipeline: ...
 ```
 
 |Key|Type|Description|Default|
 |---|---|---|---|
 |index|string|statically point the alias at this exact index, instead of managing a timestamped index set 
-|reindex.maxDocs|int|only index this many documents during reindexing: `-1` reindexes all documents|`-1`|
+|prototype.disabled|bool|don't reindex documents from prototype environment on first index creation|`false`|
+|prototype.maxDocs|int|only reindex this many documents from prototype environment on first index creation: `-1` reindexes all documents|`-1`|
 |reindex.pipeline|string|ingest pipeline to use in reindexing||
 
 

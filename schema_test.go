@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"reflect"
 	"testing"
 )
 
@@ -17,51 +16,69 @@ func Test_getSchema_resolvesEnvironmentIndices(t *testing.T) {
 			files: map[string]string{
 				"x-env1.json": "",
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "x-env1.json",
-					meta:     indexSetMeta{},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withDefaultMeta(),
 			},
 		},
 		{
 			desc:    "resolves resource from meta, fully specified with reindexing",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `reindex:
+				"x-env1.meta.yml": `
+prototype:
+  disabled: true
   maxDocs: 1
+reindex:
   pipeline: p1`,
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "",
-					meta:     indexSetMeta{Reindex: indexSetMetaReindex{MaxDocs: 1, Pipeline: "p1"}},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withMeta(
+						newIndexSetMetaMatcher().
+							withIndex("").
+							withPrototype(indexSetMetaPrototype{Disabled: true, MaxDocs: 1}).
+							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+					),
 			},
 		},
 		{
 			desc:    "resolves resource from meta, fully specified with index",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `index: "y"`,
+				"x-env1.meta.yml": `
+index: "y"`,
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "",
-					meta:     indexSetMeta{Index: "y", Reindex: indexSetMetaReindex{MaxDocs: -1}},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withMeta(
+						newIndexSetMetaMatcher().
+							withIndex("y"),
+					),
 			},
+		},
+		{
+			desc:    "returns error if prototype and index both specified",
+			envName: "env1",
+			files: map[string]string{
+				"x-env1.meta.yml": `
+index: "y"
+prototype:
+  disabled: true`,
+			},
+			expectedErr: errors.New("can't specify both static index and prototype index configuration"),
 		},
 		{
 			desc:    "returns error if reindex and index both specified",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `index: "y"
+				"x-env1.meta.yml": `
+index: "y"
 reindex:
-  maxDocs: 0`,
+  pipeline: p1`,
 			},
 			expectedErr: errors.New("can't specify both static index and reindexing configuration"),
 		},
@@ -70,15 +87,18 @@ reindex:
 			envName: "env1",
 			files: map[string]string{
 				"x-env1.json": "",
-				"x-env1.meta.yml": `reindex:
+				"x-env1.meta.yml": `
+reindex:
   pipeline: p1`,
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "x-env1.json",
-					meta:     indexSetMeta{Reindex: indexSetMetaReindex{MaxDocs: -1, Pipeline: "p1"}},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withFilePathFile("x-env1.json").
+					withMeta(
+						newIndexSetMetaMatcher().
+							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+					),
 			},
 		},
 		{
@@ -87,12 +107,11 @@ reindex:
 			files: map[string]string{
 				"x-default.json": "",
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "x-default.json",
-					meta:     indexSetMeta{},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withFilePathFile("x-default.json").
+					withDefaultMeta(),
 			},
 		},
 		{
@@ -101,15 +120,18 @@ reindex:
 			files: map[string]string{
 				"x-default.json": "",
 				"x-env1.json":    "",
-				"x-default.meta.yml": `reindex:
+				"x-default.meta.yml": `
+reindex:
   pipeline: p1`,
 			},
-			expected: []indexSet{
-				{
-					indexSet: "x",
-					filePath: "x-env1.json",
-					meta:     indexSetMeta{Reindex: indexSetMetaReindex{MaxDocs: -1, Pipeline: "p1"}},
-				},
+			expected: []*indexSetMatcher{
+				newIndexSetMatcher().
+					withName("x").
+					withFilePathFile("x-env1.json").
+					withMeta(
+						newIndexSetMetaMatcher().
+							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+					),
 			},
 		},
 	}
@@ -144,24 +166,18 @@ reindex:
 
 			schema, err := getSchema(config, tc.envName)
 
-			if err != nil && err.Error() != tc.expectedErr.Error() {
+			if !errorsEqual(err, tc.expectedErr) {
 				t.Errorf("got error %v; want %v", err, tc.expectedErr)
 			}
 
-			resolve := func(indexSets []indexSet) []indexSet {
-				for i, indexSet := range indexSets {
-					if indexSet.filePath != "" {
-						indexSets[i].filePath = path.Join(dir, indexSet.filePath)
-					}
-				}
-				return indexSets
-			}
-
 			got := schema.indexSets
-			want := resolve(tc.expected)
 
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("got %v; want %v", got, want)
+			for i, matcher := range tc.expected {
+				result := matcher.match(got[i])
+
+				if !result.matched {
+					t.Errorf("%v", result.failures)
+				}
 			}
 		})
 	}
@@ -171,6 +187,6 @@ type indexTestCase struct {
 	desc        string
 	envName     string
 	files       map[string]string
-	expected    []indexSet
+	expected    []*indexSetMatcher
 	expectedErr error
 }
