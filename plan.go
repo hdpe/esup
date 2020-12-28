@@ -16,7 +16,9 @@ func makePlan(es *ES, prototypeConfig PrototypeConfig, preprocessConfig Preproce
 		return nil, fmt.Errorf("couldn't get pipeline mutations: %w", err)
 	}
 
-	if err := appendIndexSetMutations(&plan, es, prototypeConfig, preprocessConfig, changelog, schema.indexSets, envName); err != nil {
+	version := time.Now().UTC().Format("20060102150405")
+
+	if err := appendIndexSetMutations(&plan, es, prototypeConfig, preprocessConfig, changelog, schema.indexSets, envName, version); err != nil {
 		return nil, fmt.Errorf("couldn't get index set mutations: %w", err)
 	}
 
@@ -65,7 +67,7 @@ func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 }
 
 func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig PrototypeConfig,
-	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string) error {
+	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string, version string) error {
 
 	for _, m := range indexSets {
 		aliasName := newAliasName(m.indexSet, envName)
@@ -110,7 +112,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 		if staticIndex {
 			indexName = m.meta.Index
 		} else {
-			indexName = newIndexName(m.indexSet, envName)
+			indexName = newIndexName(m.indexSet, envName, version)
 		}
 
 		pipeline := newPipelineId(m.meta.Reindex.Pipeline, envName)
@@ -180,8 +182,8 @@ func newAliasName(indexSet string, envName string) string {
 	return fmt.Sprintf("%v-%v", envName, indexSet)
 }
 
-func newIndexName(indexSet string, envName string) string {
-	return fmt.Sprintf("%v-%v_%v", envName, indexSet, time.Now().UTC().Format("20060102150405"))
+func newIndexName(indexSet string, envName string, version string) string {
+	return fmt.Sprintf("%v-%v_%v", envName, indexSet, version)
 }
 
 func newPipelineId(name string, envName string) string {
