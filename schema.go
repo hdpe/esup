@@ -4,6 +4,7 @@ import (
 	"fmt"
 	viperlib "github.com/spf13/viper"
 	"os"
+	"sort"
 )
 
 func getSchema(config Config, envName string) (schema, error) {
@@ -75,6 +76,13 @@ func getIndexSets(config IndexSetsConfig, envName string) ([]indexSet, error) {
 		}
 	}
 
+	sort.Slice(indexSets, func(i, j int) bool {
+		if indexSets[i].indexSet < indexSets[j].indexSet {
+			return true
+		}
+		return false
+	})
+
 	return indexSets, nil
 }
 
@@ -144,6 +152,13 @@ func getPipelines(config PipelinesConfig, envName string) ([]pipeline, error) {
 			filePath: r.filePath,
 		})
 	}
+
+	sort.Slice(pipelines, func(i, j int) bool {
+		if pipelines[i].name < pipelines[j].name {
+			return true
+		}
+		return false
+	})
 
 	return pipelines, nil
 }
