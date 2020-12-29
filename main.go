@@ -44,7 +44,7 @@ func main() {
 		fatalError("couldn't plan update: %v", err)
 	}
 
-	logPlan(plan)
+	logPlan(plan, config.server)
 
 	if len(plan) == 0 {
 		os.Exit(0)
@@ -70,13 +70,13 @@ func main() {
 	println("Complete")
 }
 
-func logPlan(plan []planAction) {
+func logPlan(plan []planAction, serverConfig ServerConfig) {
 	if len(plan) == 0 {
 		println("No changes")
 		return
 	}
 
-	println("Planned changes:")
+	println(fmt.Sprintf("Planned changes on %s:", serverConfig.address))
 
 	msg := ""
 
