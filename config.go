@@ -26,6 +26,7 @@ func newConfig() (Config, error) {
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
+	viper.AllowEmptyEnv(true)
 
 	return Config{
 		ServerConfig{
