@@ -7,40 +7,57 @@ import (
 	"time"
 )
 
-func makePlan(es *ES, prototypeConfig PrototypeConfig, preprocessConfig PreprocessConfig, changelog *Changelog,
-	schema schema, envName string) ([]planAction, error) {
+func newPlanner(es *ES, config Config, changelog *Changelog, s schema, envName string) *planner {
+	version := time.Now().UTC().Format("20060102150405")
 
+	return &planner{
+		es:        es,
+		config:    config,
+		changelog: changelog,
+		schema:    s,
+		envName:   envName,
+		version:   version,
+	}
+}
+
+type planner struct {
+	es        *ES
+	config    Config
+	changelog *Changelog
+	schema    schema
+	envName   string
+	version   string
+}
+
+func (r *planner) Plan() ([]planAction, error) {
 	plan := make([]planAction, 0)
 
-	if err := appendPipelineMutations(&plan, es, preprocessConfig, schema.pipelines, envName); err != nil {
+	if err := r.appendPipelineMutations(&plan); err != nil {
 		return nil, fmt.Errorf("couldn't get pipeline mutations: %w", err)
 	}
 
-	version := time.Now().UTC().Format("20060102150405")
-
-	if err := appendIndexSetMutations(&plan, es, prototypeConfig, preprocessConfig, changelog, schema.indexSets, envName, version); err != nil {
+	if err := r.appendIndexSetMutations(&plan); err != nil {
 		return nil, fmt.Errorf("couldn't get index set mutations: %w", err)
 	}
 
-	if err := appendDocumentMutations(&plan, es, preprocessConfig, changelog, schema.documents, envName); err != nil {
+	if err := r.appendDocumentMutations(&plan); err != nil {
 		return nil, fmt.Errorf("couldn't get document mutations: %w", err)
 	}
 
 	return plan, nil
 }
 
-func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig PreprocessConfig, pipelines []pipeline,
-	envName string) error {
+func (r *planner) appendPipelineMutations(plan *[]planAction) error {
 
-	for _, p := range pipelines {
-		newPipelineDef, err := preprocess(p.filePath, preprocessConfig)
+	for _, p := range r.schema.pipelines {
+		newPipelineDef, err := r.preprocess(p.filePath)
 
 		if err != nil {
-			return fmt.Errorf("couldn't read %v: %w", p.filePath, err)
+			return err
 		}
 
-		pipelineId := newPipelineId(p.name, envName)
-		existingPipelineDef, err := es.getPipelineDef(pipelineId)
+		pipelineId := newPipelineId(p.name, r.envName)
+		existingPipelineDef, err := r.es.getPipelineDef(pipelineId)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get pipeline %v: %w", pipelineId, err)
@@ -61,7 +78,7 @@ func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 		}
 
 		*plan = append(*plan, &putPipeline{
-			es:         es,
+			es:         r.es,
 			id:         pipelineId,
 			definition: newPipelineDef,
 		})
@@ -70,21 +87,20 @@ func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 	return nil
 }
 
-func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig PrototypeConfig,
-	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string, version string) error {
+func (r *planner) appendIndexSetMutations(plan *[]planAction) error {
 
-	for _, is := range indexSets {
-		aliasName := newAliasName(is.indexSet, envName)
-		existingIndices, err := es.getIndicesForAlias(aliasName)
+	for _, is := range r.schema.indexSets {
+		aliasName := newAliasName(is.indexSet, r.envName)
+		existingIndices, err := r.es.getIndicesForAlias(aliasName)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get alias %v: %w", aliasName, err)
 		}
 
-		newIndexDef, err := preprocess(is.filePath, preprocessConfig)
+		newIndexDef, err := r.preprocess(is.filePath)
 
 		if err != nil {
-			return fmt.Errorf("couldn't read %v: %w", is.filePath, err)
+			return err
 		}
 
 		newIndexMeta, err := json.Marshal(is.meta)
@@ -93,8 +109,8 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", is.indexSet, err)
 		}
 
-		changelogEntry, err := changelog.getCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
-			envName)
+		changelogEntry, err := r.changelog.getCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
+			r.envName)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get changelog entry for %v: %w", is.ResourceIdentifier(), err)
@@ -106,7 +122,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			return fmt.Errorf("couldn't diff %v with changelog: %w", is.ResourceIdentifier(), err)
 		}
 
-		if !planChangesPipeline(*plan, is.meta.Reindex.Pipeline, envName) && !changed {
+		if !planChangesPipeline(*plan, is.meta.Reindex.Pipeline, r.envName) && !changed {
 			continue
 		}
 
@@ -117,14 +133,14 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 		if staticIndex {
 			indexName = is.meta.Index
 		} else {
-			indexName = newIndexName(is.indexSet, envName, version)
+			indexName = newIndexName(is.indexSet, r.envName, r.version)
 		}
 
-		pipeline := newPipelineId(is.meta.Reindex.Pipeline, envName)
+		pipeline := newPipelineId(is.meta.Reindex.Pipeline, r.envName)
 
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
-				es:         es,
+				es:         r.es,
 				name:       indexName,
 				indexSet:   is.indexSet,
 				definition: newIndexDef,
@@ -133,9 +149,9 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 
 		if existingIndices == nil {
 			if !staticIndex {
-				if e := prototypeConfig.environment; e != "" && e != envName && !is.meta.Prototype.Disabled {
+				if e := r.config.prototype.environment; e != "" && e != r.envName && !is.meta.Prototype.Disabled {
 					*plan = append(*plan, &reindex{
-						es:       es,
+						es:       r.es,
 						from:     newAliasName(is.indexSet, e),
 						to:       indexName,
 						maxDocs:  is.meta.Prototype.MaxDocs,
@@ -145,14 +161,14 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			}
 
 			*plan = append(*plan, &createAlias{
-				es:    es,
+				es:    r.es,
 				name:  aliasName,
 				index: indexName,
 			})
 		} else {
 			if !staticIndex {
 				*plan = append(*plan, &reindex{
-					es:       es,
+					es:       r.es,
 					from:     aliasName,
 					to:       indexName,
 					maxDocs:  -1,
@@ -162,7 +178,7 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 
 			if !staticIndex || !reflect.DeepEqual([]string{indexName}, existingIndices) {
 				*plan = append(*plan, &updateAlias{
-					es:         es,
+					es:         r.es,
 					name:       aliasName,
 					newIndex:   indexName,
 					oldIndices: existingIndices,
@@ -171,31 +187,30 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 		}
 
 		*plan = append(*plan, &writeChangelogEntry{
-			changelog:          changelog,
+			changelog:          r.changelog,
 			resourceType:       "index_set",
 			resourceIdentifier: is.ResourceIdentifier(),
 			finalName:          indexName,
 			definition:         newIndexDef,
 			meta:               string(newIndexMeta),
-			envName:            envName,
+			envName:            r.envName,
 		})
 	}
 
 	return nil
 }
 
-func appendDocumentMutations(plan *[]planAction, es *ES,
-	preprocessConfig PreprocessConfig, changelog *Changelog, docs []document, envName string) error {
+func (r *planner) appendDocumentMutations(plan *[]planAction) error {
 
-	for _, doc := range docs {
-		final, err := preprocess(doc.filePath, preprocessConfig)
+	for _, doc := range r.schema.documents {
+		final, err := r.preprocess(doc.filePath)
 
 		if err != nil {
-			return fmt.Errorf("couldn't read %v: %w", doc.filePath, err)
+			return nil
 		}
 
-		changelogEntry, err := changelog.getCurrentChangelogEntry("document", doc.ResourceIdentifier(),
-			envName)
+		changelogEntry, err := r.changelog.getCurrentChangelogEntry("document", doc.ResourceIdentifier(),
+			r.envName)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get changelog entry for %v: %w", doc.ResourceIdentifier(), err)
@@ -211,26 +226,36 @@ func appendDocumentMutations(plan *[]planAction, es *ES,
 			continue
 		}
 
-		index := newAliasName(doc.indexSet, envName)
+		index := newAliasName(doc.indexSet, r.envName)
 
 		*plan = append(*plan, &indexDocument{
-			es:       es,
+			es:       r.es,
 			id:       doc.name,
 			index:    index,
 			document: final,
 		})
 
 		*plan = append(*plan, &writeChangelogEntry{
-			changelog:          changelog,
+			changelog:          r.changelog,
 			resourceType:       "document",
 			resourceIdentifier: doc.ResourceIdentifier(),
 			finalName:          doc.name,
 			definition:         final,
-			envName:            envName,
+			envName:            r.envName,
 		})
 	}
 
 	return nil
+}
+
+func (r *planner) preprocess(filePath string) (string, error) {
+	newDef, err := preprocess(filePath, r.config.preprocess)
+
+	if err != nil {
+		return "", fmt.Errorf("couldn't read %v: %w", filePath, err)
+	}
+
+	return newDef, nil
 }
 
 func newAliasName(indexSet string, envName string) string {

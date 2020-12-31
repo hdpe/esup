@@ -38,7 +38,8 @@ func main() {
 		es:     es,
 	}
 
-	plan, err := makePlan(es, config.prototype, config.preprocess, changelog, schema, cmd.envName)
+	planner := newPlanner(es, config, changelog, schema, cmd.envName)
+	plan, err := planner.Plan()
 
 	if err != nil {
 		fatalError("couldn't plan update: %v", err)
