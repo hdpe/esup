@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"regexp"
 	"text/template"
 )
 
@@ -52,5 +53,10 @@ func preprocess(filename string, config PreprocessConfig) (string, error) {
 		return "", fmt.Errorf("couldn't execute template %v: %w", filename, err)
 	}
 
-	return buf.String(), nil
+	result := buf.String()
+
+	// remove block comments - illegal JSON, but Elasticsearch APIs tolerate them
+	result = string(regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAll([]byte(result), []byte{}))
+
+	return result, nil
 }
