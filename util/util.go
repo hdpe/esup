@@ -1,19 +1,19 @@
-package main
+package util
 
 import (
 	"bytes"
 	"encoding/base64"
 )
 
-func boolptr(b bool) *bool {
+func Boolptr(b bool) *bool {
 	return &b
 }
 
-func intptr(i int) *int {
+func Intptr(i int) *int {
 	return &i
 }
 
-func base64enc(str string) (string, error) {
+func Base64enc(str string) (string, error) {
 	if str == "" {
 		return str, nil
 	}

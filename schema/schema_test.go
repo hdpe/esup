@@ -1,7 +1,9 @@
-package main
+package schema
 
 import (
 	"errors"
+	"github.com/hdpe.me/esup/config"
+	"github.com/hdpe.me/esup/testutil"
 	"io/ioutil"
 	"os"
 	"path"
@@ -16,7 +18,7 @@ func Test_getSchema_resolvesResources(t *testing.T) {
 			files: map[string]string{
 				"indexSets/x-env1.json": "",
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withDefaultMeta(),
@@ -33,14 +35,14 @@ prototype:
 reindex:
   pipeline: p1`,
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withMeta(
 						newIndexSetMetaMatcher().
 							withIndex("").
-							withPrototype(indexSetMetaPrototype{Disabled: true, MaxDocs: 1}).
-							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+							withPrototype(IndexSetMetaPrototype{Disabled: true, MaxDocs: 1}).
+							withReindex(IndexSetMetaReindex{Pipeline: "p1"}),
 					),
 			},
 		},
@@ -51,7 +53,7 @@ reindex:
 				"indexSets/x-env1.meta.yml": `
 index: "y"`,
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withMeta(
@@ -91,13 +93,13 @@ reindex:
 reindex:
   pipeline: p1`,
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-env1.json").
 					withMeta(
 						newIndexSetMetaMatcher().
-							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+							withReindex(IndexSetMetaReindex{Pipeline: "p1"}),
 					),
 			},
 		},
@@ -107,7 +109,7 @@ reindex:
 			files: map[string]string{
 				"indexSets/x-default.json": "",
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-default.json").
@@ -124,13 +126,13 @@ reindex:
 reindex:
   pipeline: p1`,
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-env1.json").
 					withMeta(
 						newIndexSetMetaMatcher().
-							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
+							withReindex(IndexSetMetaReindex{Pipeline: "p1"}),
 					),
 			},
 		},
@@ -141,7 +143,7 @@ reindex:
 				"indexSets/x-env1.json":   "",
 				"documents/x-y-env1.json": "",
 			},
-			expected: []matcher{
+			expected: []testutil.Matcher{
 				newIndexSetMatcher().withName("x"),
 				newDocumentMatcher().withIndexSet("x").withName("y").withFilePathFile("x-y-env1.json"),
 			},
@@ -188,22 +190,22 @@ reindex:
 				}
 			}
 
-			config := Config{
-				indexSets: IndexSetsConfig{directory: path.Join(dir, "indexSets")},
-				documents: DocumentsConfig{directory: path.Join(dir, "documents")},
+			conf := config.Config{
+				IndexSets: config.IndexSetsConfig{Directory: path.Join(dir, "indexSets")},
+				Documents: config.DocumentsConfig{Directory: path.Join(dir, "documents")},
 			}
 
-			schema, err := getSchema(config, tc.envName)
+			schema, err := GetSchema(conf, tc.envName)
 
-			if !errorsEqual(err, tc.expectedErr) {
+			if !testutil.ErrorsEqual(err, tc.expectedErr) {
 				t.Errorf("got error %v; want %v", err, tc.expectedErr)
 			}
 
 			got := make([]interface{}, 0)
-			for _, is := range schema.indexSets {
+			for _, is := range schema.IndexSets {
 				got = append(got, is)
 			}
-			for _, doc := range schema.documents {
+			for _, doc := range schema.Documents {
 				got = append(got, doc)
 			}
 
@@ -213,10 +215,10 @@ reindex:
 			}
 
 			for i, matcher := range tc.expected {
-				result := matcher.match(got[i])
+				result := matcher.Match(got[i])
 
-				if !result.matched {
-					t.Errorf("%v", result.failures)
+				if !result.Matched {
+					t.Errorf("%v", result.Failures)
 				}
 			}
 		})
@@ -227,6 +229,6 @@ type indexTestCase struct {
 	desc        string
 	envName     string
 	files       map[string]string
-	expected    []matcher
+	expected    []testutil.Matcher
 	expectedErr error
 }

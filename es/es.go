@@ -1,4 +1,4 @@
-package main
+package es
 
 import (
 	"bytes"
@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
+	"github.com/hdpe.me/esup/config"
+	"github.com/hdpe.me/esup/util"
 	"github.com/tidwall/gjson"
 	"io"
 	"strings"
 )
 
-func newES(serverConfig ServerConfig) (*ES, error) {
-	apiKey := serverConfig.apiKey
+func NewClient(serverConfig config.ServerConfig) (*Client, error) {
+	apiKey := serverConfig.ApiKey
 	if apiKey != "" {
 		if !gjson.Valid(apiKey) {
 			return nil, fmt.Errorf("illegal API key: expected JSON API key, not %v", apiKey)
@@ -21,7 +23,7 @@ func newES(serverConfig ServerConfig) (*ES, error) {
 		parsed := gjson.Parse(apiKey)
 
 		var err error
-		apiKey, err = base64enc(fmt.Sprintf("%v:%v", parsed.Get("id").String(),
+		apiKey, err = util.Base64enc(fmt.Sprintf("%v:%v", parsed.Get("id").String(),
 			parsed.Get("api_key").String()))
 
 		if err != nil {
@@ -30,7 +32,7 @@ func newES(serverConfig ServerConfig) (*ES, error) {
 	}
 
 	clientConfig := elasticsearch.Config{
-		Addresses: []string{serverConfig.address},
+		Addresses: []string{serverConfig.Address},
 		APIKey:    apiKey,
 	}
 
@@ -40,15 +42,15 @@ func newES(serverConfig ServerConfig) (*ES, error) {
 		return nil, err
 	}
 
-	return &ES{client}, nil
+	return &Client{client}, nil
 }
 
-type ES struct {
+type Client struct {
 	client *elasticsearch.Client
 }
 
-func (r *ES) getChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
-	envName string) (changelogEntry, error) {
+func (r *Client) GetChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
+	envName string) (ChangelogEntry, error) {
 
 	body := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -82,39 +84,39 @@ func (r *ES) getChangelogEntry(indexName string, resourceType string, resourceId
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
-		return changelogEntry{}, fmt.Errorf("couldn't encode JSON request: %w", err)
+		return ChangelogEntry{}, fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
 	res, err := r.client.Search(func(req *esapi.SearchRequest) {
 		req.Index = []string{indexName}
 		req.Body = &buf
-		req.Size = intptr(1)
+		req.Size = util.Intptr(1)
 	})
 
 	if err != nil {
-		return changelogEntry{}, err
+		return ChangelogEntry{}, err
 	}
 
 	responseBody, err := getBodyAndVerifyResponse(res)
 
 	if err != nil {
-		return changelogEntry{}, fmt.Errorf("couldn't get changelog entry: %w", err)
+		return ChangelogEntry{}, fmt.Errorf("couldn't get changelog entry: %w", err)
 	}
 
 	_source := gjson.Get(responseBody, "hits.hits.0._source")
 
 	if !_source.Exists() {
-		return changelogEntry{}, nil
+		return ChangelogEntry{}, nil
 	}
 
-	return changelogEntry{
-		present: true,
-		content: _source.Get("content").String(),
-		meta:    _source.Get("meta").String(),
+	return ChangelogEntry{
+		IsPresent: true,
+		Content:   _source.Get("content").String(),
+		Meta:      _source.Get("meta").String(),
 	}, nil
 }
 
-func (r *ES) indexDocument(indexName string, id string, body map[string]interface{}) error {
+func (r *Client) IndexDocument(indexName string, id string, body map[string]interface{}) error {
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -138,7 +140,7 @@ func (r *ES) indexDocument(indexName string, id string, body map[string]interfac
 	return nil
 }
 
-func (r *ES) getIndicesForAlias(alias string) ([]string, error) {
+func (r *Client) GetIndicesForAlias(alias string) ([]string, error) {
 	res, err := r.client.Indices.GetAlias(func(req *esapi.IndicesGetAliasRequest) {
 		req.Name = []string{alias}
 	})
@@ -172,7 +174,7 @@ func (r *ES) getIndicesForAlias(alias string) ([]string, error) {
 	return result, nil
 }
 
-func (r *ES) getIndexDef(index string) (string, error) {
+func (r *Client) GetIndexDef(index string) (string, error) {
 	res, err := r.client.Indices.Get([]string{index})
 
 	if err != nil {
@@ -188,7 +190,7 @@ func (r *ES) getIndexDef(index string) (string, error) {
 	return body, nil
 }
 
-func (r *ES) createIndex(index string, mapping string) error {
+func (r *Client) CreateIndex(index string, mapping string) error {
 	res, err := r.client.Indices.Create(index, func(req *esapi.IndicesCreateRequest) {
 		req.Body = strings.NewReader(mapping)
 	})
@@ -204,7 +206,7 @@ func (r *ES) createIndex(index string, mapping string) error {
 	return nil
 }
 
-func (r *ES) reindex(fromIndex string, toIndex string, maxDocs int, pipeline string) (string, error) {
+func (r *Client) Reindex(fromIndex string, toIndex string, maxDocs int, pipeline string) (string, error) {
 	body := map[string]interface{}{
 		"source": map[string]interface{}{
 			"index": fromIndex,
@@ -222,9 +224,9 @@ func (r *ES) reindex(fromIndex string, toIndex string, maxDocs int, pipeline str
 	}
 
 	res, err := r.client.Reindex(&buf, func(request *esapi.ReindexRequest) {
-		request.WaitForCompletion = boolptr(false)
+		request.WaitForCompletion = util.Boolptr(false)
 		if maxDocs != -1 {
-			request.MaxDocs = intptr(maxDocs)
+			request.MaxDocs = util.Intptr(maxDocs)
 		}
 	})
 
@@ -247,7 +249,7 @@ func (r *ES) reindex(fromIndex string, toIndex string, maxDocs int, pipeline str
 	return task.String(), nil
 }
 
-func (r *ES) createAlias(aliasName string, indexName string) error {
+func (r *Client) CreateAlias(aliasName string, indexName string) error {
 	res, err := r.client.Indices.PutAlias([]string{indexName}, aliasName)
 
 	if err != nil {
@@ -261,7 +263,7 @@ func (r *ES) createAlias(aliasName string, indexName string) error {
 	return nil
 }
 
-func (r *ES) updateAlias(aliasName string, newIndex string, oldIndices []string) error {
+func (r *Client) UpdateAlias(aliasName string, newIndex string, oldIndices []string) error {
 	actions := make([]map[string]interface{}, 0)
 
 	for _, old := range oldIndices {
@@ -303,7 +305,7 @@ func (r *ES) updateAlias(aliasName string, newIndex string, oldIndices []string)
 	return nil
 }
 
-func (r *ES) getPipelineDef(id string) (string, error) {
+func (r *Client) GetPipelineDef(id string) (string, error) {
 	res, err := r.client.Ingest.GetPipeline(func(req *esapi.IngestGetPipelineRequest) {
 		req.PipelineID = id
 	})
@@ -331,7 +333,7 @@ func (r *ES) getPipelineDef(id string) (string, error) {
 	return value, nil
 }
 
-func (r *ES) putPipelineDef(id string, definition string) error {
+func (r *Client) PutPipelineDef(id string, definition string) error {
 	res, err := r.client.Ingest.PutPipeline(id, bytes.NewBufferString(definition))
 
 	if err != nil {
@@ -345,17 +347,17 @@ func (r *ES) putPipelineDef(id string, definition string) error {
 	return nil
 }
 
-func (r *ES) getTaskStatus(id string) (taskStatus, error) {
+func (r *Client) GetTaskStatus(id string) (TaskStatus, error) {
 	res, err := r.client.Tasks.Get(id)
 
 	if err != nil {
-		return taskStatus{}, err
+		return TaskStatus{}, err
 	}
 
 	body, err := getBodyAndVerifyResponse(res)
 
 	if err != nil {
-		return taskStatus{}, fmt.Errorf("couldn't get task: %w", err)
+		return TaskStatus{}, fmt.Errorf("couldn't get task: %w", err)
 	}
 
 	return newTaskStatus(body), nil
@@ -443,58 +445,4 @@ func extractSingleValue(body string) (string, error) {
 	}
 
 	return "", nil
-}
-
-func newTaskStatus(body string) taskStatus {
-	var completed bool
-	var done int64
-	var total int64
-	var failure taskStatusFailure
-
-	if parsed := gjson.Get(body, "completed"); parsed.Exists() {
-		completed = parsed.Bool()
-	}
-
-	if parsed := gjson.Get(body, "task.status"); parsed.Exists() {
-		created := parsed.Get("created").Int()
-		updated := parsed.Get("updated").Int()
-		deleted := parsed.Get("deleted").Int()
-
-		done = created + updated + deleted
-		total = parsed.Get("total").Int()
-	}
-
-	if parsed := gjson.Get(body, "response.failures.0"); parsed.Exists() {
-		failure = taskStatusFailure{
-			id:          parsed.Get("id").String(),
-			causeType:   parsed.Get("cause.type").String(),
-			causeReason: parsed.Get("cause.reason").String(),
-		}
-	}
-
-	return taskStatus{
-		completed: completed,
-		done:      done,
-		total:     total,
-		failure:   failure,
-	}
-}
-
-type taskStatus struct {
-	completed bool
-	done      int64
-	total     int64
-	failure   taskStatusFailure
-}
-
-type taskStatusFailure struct {
-	id          string
-	causeType   string
-	causeReason string
-}
-
-type changelogEntry struct {
-	present bool
-	content string
-	meta    string
 }

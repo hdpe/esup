@@ -1,16 +1,20 @@
-package main
+package plan
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hdpe.me/esup/config"
+	"github.com/hdpe.me/esup/diff"
+	"github.com/hdpe.me/esup/es"
+	"github.com/hdpe.me/esup/schema"
 	"reflect"
 	"time"
 )
 
-func newPlanner(es *ES, config Config, changelog *Changelog, s schema, envName string) *planner {
+func NewPlanner(es *es.Client, config config.Config, changelog *Changelog, s schema.Schema, envName string) *Planner {
 	version := time.Now().UTC().Format("20060102150405")
 
-	return &planner{
+	return &Planner{
 		es:        es,
 		config:    config,
 		changelog: changelog,
@@ -20,17 +24,17 @@ func newPlanner(es *ES, config Config, changelog *Changelog, s schema, envName s
 	}
 }
 
-type planner struct {
-	es        *ES
-	config    Config
+type Planner struct {
+	es        *es.Client
+	config    config.Config
 	changelog *Changelog
-	schema    schema
+	schema    schema.Schema
 	envName   string
 	version   string
 }
 
-func (r *planner) Plan() ([]planAction, error) {
-	plan := make([]planAction, 0)
+func (r *Planner) Plan() ([]PlanAction, error) {
+	plan := make([]PlanAction, 0)
 
 	if err := r.appendPipelineMutations(&plan); err != nil {
 		return nil, fmt.Errorf("couldn't get pipeline mutations: %w", err)
@@ -47,17 +51,17 @@ func (r *planner) Plan() ([]planAction, error) {
 	return plan, nil
 }
 
-func (r *planner) appendPipelineMutations(plan *[]planAction) error {
+func (r *Planner) appendPipelineMutations(plan *[]PlanAction) error {
 
-	for _, p := range r.schema.pipelines {
-		newPipelineDef, err := r.preprocess(p.filePath)
+	for _, p := range r.schema.Pipelines {
+		newPipelineDef, err := r.preprocess(p.FilePath)
 
 		if err != nil {
 			return err
 		}
 
-		pipelineId := newPipelineId(p.name, r.envName)
-		existingPipelineDef, err := r.es.getPipelineDef(pipelineId)
+		pipelineId := newPipelineId(p.Name, r.envName)
+		existingPipelineDef, err := r.es.GetPipelineDef(pipelineId)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get pipeline %v: %w", pipelineId, err)
@@ -66,10 +70,10 @@ func (r *planner) appendPipelineMutations(plan *[]planAction) error {
 		changed := true
 
 		if existingPipelineDef != "" {
-			changed, err = diff(newPipelineDef, existingPipelineDef)
+			changed, err = diff.Diff(newPipelineDef, existingPipelineDef)
 
 			if err != nil {
-				return fmt.Errorf("couldn't diff %v with existing: %w", p.filePath, err)
+				return fmt.Errorf("couldn't diff %v with existing: %w", p.FilePath, err)
 			}
 		}
 
@@ -87,26 +91,26 @@ func (r *planner) appendPipelineMutations(plan *[]planAction) error {
 	return nil
 }
 
-func (r *planner) appendIndexSetMutations(plan *[]planAction) error {
+func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 
-	for _, is := range r.schema.indexSets {
-		aliasName := newAliasName(is.indexSet, r.envName)
-		existingIndices, err := r.es.getIndicesForAlias(aliasName)
+	for _, is := range r.schema.IndexSets {
+		aliasName := newAliasName(is.IndexSet, r.envName)
+		existingIndices, err := r.es.GetIndicesForAlias(aliasName)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get alias %v: %w", aliasName, err)
 		}
 
-		newIndexDef, err := r.preprocess(is.filePath)
+		newIndexDef, err := r.preprocess(is.FilePath)
 
 		if err != nil {
 			return err
 		}
 
-		newIndexMeta, err := json.Marshal(is.meta)
+		newIndexMeta, err := json.Marshal(is.Meta)
 
 		if err != nil {
-			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", is.indexSet, err)
+			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", is.IndexSet, err)
 		}
 
 		changelogEntry, err := r.changelog.getCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
@@ -122,39 +126,39 @@ func (r *planner) appendIndexSetMutations(plan *[]planAction) error {
 			return fmt.Errorf("couldn't diff %v with changelog: %w", is.ResourceIdentifier(), err)
 		}
 
-		if !planChangesPipeline(*plan, is.meta.Reindex.Pipeline, r.envName) && !changed {
+		if !planChangesPipeline(*plan, is.Meta.Reindex.Pipeline, r.envName) && !changed {
 			continue
 		}
 
-		staticIndex := is.meta.Index != ""
+		staticIndex := is.Meta.Index != ""
 
 		var indexName string
 
 		if staticIndex {
-			indexName = is.meta.Index
+			indexName = is.Meta.Index
 		} else {
-			indexName = newIndexName(is.indexSet, r.envName, r.version)
+			indexName = newIndexName(is.IndexSet, r.envName, r.version)
 		}
 
-		pipeline := newPipelineId(is.meta.Reindex.Pipeline, r.envName)
+		pipeline := newPipelineId(is.Meta.Reindex.Pipeline, r.envName)
 
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
 				es:         r.es,
 				name:       indexName,
-				indexSet:   is.indexSet,
+				indexSet:   is.IndexSet,
 				definition: newIndexDef,
 			})
 		}
 
 		if existingIndices == nil {
 			if !staticIndex {
-				if e := r.config.prototype.environment; e != "" && e != r.envName && !is.meta.Prototype.Disabled {
+				if e := r.config.Prototype.Environment; e != "" && e != r.envName && !is.Meta.Prototype.Disabled {
 					*plan = append(*plan, &reindex{
 						es:       r.es,
-						from:     newAliasName(is.indexSet, e),
+						from:     newAliasName(is.IndexSet, e),
 						to:       indexName,
-						maxDocs:  is.meta.Prototype.MaxDocs,
+						maxDocs:  is.Meta.Prototype.MaxDocs,
 						pipeline: pipeline,
 					})
 				}
@@ -200,10 +204,10 @@ func (r *planner) appendIndexSetMutations(plan *[]planAction) error {
 	return nil
 }
 
-func (r *planner) appendDocumentMutations(plan *[]planAction) error {
+func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 
-	for _, doc := range r.schema.documents {
-		final, err := r.preprocess(doc.filePath)
+	for _, doc := range r.schema.Documents {
+		final, err := r.preprocess(doc.FilePath)
 
 		if err != nil {
 			return nil
@@ -226,11 +230,11 @@ func (r *planner) appendDocumentMutations(plan *[]planAction) error {
 			continue
 		}
 
-		index := newAliasName(doc.indexSet, r.envName)
+		index := newAliasName(doc.IndexSet, r.envName)
 
 		*plan = append(*plan, &indexDocument{
 			es:       r.es,
-			id:       doc.name,
+			id:       doc.Name,
 			index:    index,
 			document: final,
 		})
@@ -239,7 +243,7 @@ func (r *planner) appendDocumentMutations(plan *[]planAction) error {
 			changelog:          r.changelog,
 			resourceType:       "document",
 			resourceIdentifier: doc.ResourceIdentifier(),
-			finalName:          doc.name,
+			finalName:          doc.Name,
 			definition:         final,
 			envName:            r.envName,
 		})
@@ -248,8 +252,8 @@ func (r *planner) appendDocumentMutations(plan *[]planAction) error {
 	return nil
 }
 
-func (r *planner) preprocess(filePath string) (string, error) {
-	newDef, err := preprocess(filePath, r.config.preprocess)
+func (r *Planner) preprocess(filePath string) (string, error) {
+	newDef, err := preprocess(filePath, r.config.Preprocess)
 
 	if err != nil {
 		return "", fmt.Errorf("couldn't read %v: %w", filePath, err)
@@ -274,12 +278,12 @@ func newPipelineId(name string, envName string) string {
 	return fmt.Sprintf("%v-%v", envName, name)
 }
 
-func changelogDiff(newResourceDef string, newResourceMeta string, changelogEntry changelogEntry) (bool, error) {
-	if !changelogEntry.present {
+func changelogDiff(newResourceDef string, newResourceMeta string, changelogEntry es.ChangelogEntry) (bool, error) {
+	if !changelogEntry.IsPresent {
 		return true, nil
 	}
 
-	changed, err := diff(newResourceDef, changelogEntry.content)
+	changed, err := diff.Diff(newResourceDef, changelogEntry.Content)
 
 	if err != nil {
 		return false, fmt.Errorf("couldn't diff resource content with existing: %w", err)
@@ -289,7 +293,7 @@ func changelogDiff(newResourceDef string, newResourceMeta string, changelogEntry
 		return true, nil
 	}
 
-	changed, err = diff(newResourceMeta, changelogEntry.meta)
+	changed, err = diff.Diff(newResourceMeta, changelogEntry.Meta)
 
 	if err != nil {
 		return false, fmt.Errorf("couldn't diff resource meta with existing: %w", err)
@@ -298,7 +302,7 @@ func changelogDiff(newResourceDef string, newResourceMeta string, changelogEntry
 	return changed, nil
 }
 
-func planChangesPipeline(plan []planAction, pipeline string, envName string) bool {
+func planChangesPipeline(plan []PlanAction, pipeline string, envName string) bool {
 	for _, item := range plan {
 		if putPipeline, ok := item.(*putPipeline); ok {
 			if putPipeline.id == newPipelineId(pipeline, envName) {
@@ -310,7 +314,7 @@ func planChangesPipeline(plan []planAction, pipeline string, envName string) boo
 	return false
 }
 
-type planAction interface {
-	execute() error
+type PlanAction interface {
+	Execute() error
 	String() string
 }

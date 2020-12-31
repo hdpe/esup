@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func newConfig() (Config, error) {
+func NewConfig() (Config, error) {
 	viper := viperlib.New()
 	viper.SetDefault("server.address", "http://localhost:9200")
 	viper.SetDefault("changelog.index", "esup-changelog0")
@@ -31,53 +31,53 @@ func newConfig() (Config, error) {
 
 	return Config{
 		ServerConfig{
-			address: viper.GetString("server.address"),
-			apiKey:  viper.GetString("server.apiKey"),
+			Address: viper.GetString("server.address"),
+			ApiKey:  viper.GetString("server.apiKey"),
 		},
-		PrototypeConfig{environment: viper.GetString("prototype.environment")},
-		ChangelogConfig{index: viper.GetString("changelog.index")},
-		IndexSetsConfig{directory: viper.GetString("indexSets.directory")},
-		PipelinesConfig{directory: viper.GetString("pipelines.directory")},
-		DocumentsConfig{directory: viper.GetString("documents.directory")},
-		PreprocessConfig{includesDirectory: viper.GetString("preprocess.includesDirectory")},
+		PrototypeConfig{Environment: viper.GetString("prototype.environment")},
+		ChangelogConfig{Index: viper.GetString("changelog.index")},
+		IndexSetsConfig{Directory: viper.GetString("indexSets.directory")},
+		PipelinesConfig{Directory: viper.GetString("pipelines.directory")},
+		DocumentsConfig{Directory: viper.GetString("documents.directory")},
+		PreprocessConfig{IncludesDirectory: viper.GetString("preprocess.includesDirectory")},
 	}, nil
 }
 
 type Config struct {
-	server     ServerConfig
-	prototype  PrototypeConfig
-	changelog  ChangelogConfig
-	indexSets  IndexSetsConfig
-	pipelines  PipelinesConfig
-	documents  DocumentsConfig
-	preprocess PreprocessConfig
+	Server     ServerConfig
+	Prototype  PrototypeConfig
+	Changelog  ChangelogConfig
+	IndexSets  IndexSetsConfig
+	Pipelines  PipelinesConfig
+	Documents  DocumentsConfig
+	Preprocess PreprocessConfig
 }
 
 type ServerConfig struct {
-	address string
-	apiKey  string
+	Address string
+	ApiKey  string
 }
 
 type PrototypeConfig struct {
-	environment string
+	Environment string
 }
 
 type ChangelogConfig struct {
-	index string
+	Index string
 }
 
 type IndexSetsConfig struct {
-	directory string
+	Directory string
 }
 
 type PipelinesConfig struct {
-	directory string
+	Directory string
 }
 
 type DocumentsConfig struct {
-	directory string
+	Directory string
 }
 
 type PreprocessConfig struct {
-	includesDirectory string
+	IncludesDirectory string
 }

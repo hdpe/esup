@@ -1,22 +1,23 @@
-package main
+package plan
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/hdpe.me/esup/es"
 	"sync"
 	"time"
 )
 
 type createIndex struct {
-	es         *ES
+	es         *es.Client
 	name       string
 	indexSet   string
 	definition string
 }
 
-func (r *createIndex) execute() error {
-	return r.es.createIndex(r.name, r.definition)
+func (r *createIndex) Execute() error {
+	return r.es.CreateIndex(r.name, r.definition)
 }
 
 func (r *createIndex) String() string {
@@ -33,9 +34,9 @@ type writeChangelogEntry struct {
 	envName            string
 }
 
-func (r *writeChangelogEntry) execute() error {
+func (r *writeChangelogEntry) Execute() error {
 	return r.changelog.putChangelogEntry(r.resourceType, r.resourceIdentifier, r.finalName,
-		changelogEntry{content: r.definition, meta: r.meta}, r.envName)
+		es.ChangelogEntry{Content: r.definition, Meta: r.meta}, r.envName)
 }
 
 func (r *writeChangelogEntry) String() string {
@@ -43,15 +44,15 @@ func (r *writeChangelogEntry) String() string {
 }
 
 type reindex struct {
-	es       *ES
+	es       *es.Client
 	from     string
 	to       string
 	maxDocs  int
 	pipeline string
 }
 
-func (r *reindex) execute() error {
-	taskId, err := r.es.reindex(r.from, r.to, r.maxDocs, r.pipeline)
+func (r *reindex) Execute() error {
+	taskId, err := r.es.Reindex(r.from, r.to, r.maxDocs, r.pipeline)
 
 	if err != nil {
 		return err
@@ -79,18 +80,18 @@ func (r *reindex) execute() error {
 		for {
 			select {
 			case <-ticker.C:
-				status, err := r.es.getTaskStatus(taskId)
+				status, err := r.es.GetTaskStatus(taskId)
 
 				if progress == nil {
-					progress = pb.Start64(status.total)
+					progress = pb.Start64(status.Total)
 				}
-				progress.SetCurrent(status.done)
+				progress.SetCurrent(status.Done)
 
 				if err != nil {
 					done(err)
-				} else if status.completed {
-					if failure := status.failure; failure.causeType != "" {
-						done(fmt.Errorf("%v: [%v] %v", failure.id, failure.causeType, failure.causeReason))
+				} else if status.IsCompleted {
+					if failure := status.Failure; failure.CauseType != "" {
+						done(fmt.Errorf("%v: [%v] %v", failure.Id, failure.CauseType, failure.CauseReason))
 					} else {
 						done(nil)
 					}
@@ -121,13 +122,13 @@ func (r *reindex) String() string {
 }
 
 type createAlias struct {
-	es    *ES
+	es    *es.Client
 	name  string
 	index string
 }
 
-func (r *createAlias) execute() error {
-	return r.es.createAlias(r.name, r.index)
+func (r *createAlias) Execute() error {
+	return r.es.CreateAlias(r.name, r.index)
 }
 
 func (r *createAlias) String() string {
@@ -135,14 +136,14 @@ func (r *createAlias) String() string {
 }
 
 type updateAlias struct {
-	es         *ES
+	es         *es.Client
 	name       string
 	newIndex   string
 	oldIndices []string
 }
 
-func (r *updateAlias) execute() error {
-	return r.es.updateAlias(r.name, r.newIndex, r.oldIndices)
+func (r *updateAlias) Execute() error {
+	return r.es.UpdateAlias(r.name, r.newIndex, r.oldIndices)
 }
 
 func (r *updateAlias) String() string {
@@ -150,13 +151,13 @@ func (r *updateAlias) String() string {
 }
 
 type putPipeline struct {
-	es         *ES
+	es         *es.Client
 	id         string
 	definition string
 }
 
-func (r *putPipeline) execute() error {
-	return r.es.putPipelineDef(r.id, r.definition)
+func (r *putPipeline) Execute() error {
+	return r.es.PutPipelineDef(r.id, r.definition)
 }
 
 func (r *putPipeline) String() string {
@@ -164,20 +165,20 @@ func (r *putPipeline) String() string {
 }
 
 type indexDocument struct {
-	es       *ES
+	es       *es.Client
 	index    string
 	id       string
 	document string
 }
 
-func (r *indexDocument) execute() error {
+func (r *indexDocument) Execute() error {
 	var body map[string]interface{}
 
 	if err := json.Unmarshal([]byte(r.document), &body); err != nil {
 		return fmt.Errorf("couldn't index document %v/%v: document to index wasn't valid json: %w", r.index, r.id, err)
 	}
 
-	if err := r.es.indexDocument(r.index, r.id, body); err != nil {
+	if err := r.es.IndexDocument(r.index, r.id, body); err != nil {
 		return fmt.Errorf("couldn't index document %v/%v: %w", r.index, r.id, err)
 	}
 

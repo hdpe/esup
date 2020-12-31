@@ -1,15 +1,16 @@
-package main
+package plan
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/hdpe.me/esup/config"
 	"io/ioutil"
 	"path"
 	"regexp"
 	"text/template"
 )
 
-func preprocess(filename string, config PreprocessConfig) (string, error) {
+func preprocess(filename string, config config.PreprocessConfig) (string, error) {
 	if filename == "" {
 		return "", nil
 	}
@@ -24,7 +25,7 @@ func preprocess(filename string, config PreprocessConfig) (string, error) {
 
 	funcMap := template.FuncMap{
 		"include": func(name string) string {
-			filename := path.Join(config.includesDirectory, fmt.Sprintf("%v.json", name))
+			filename := path.Join(config.IncludesDirectory, fmt.Sprintf("%v.json", name))
 			b, err := ioutil.ReadFile(filename)
 
 			if err != nil {

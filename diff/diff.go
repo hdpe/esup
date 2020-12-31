@@ -1,10 +1,10 @@
-package main
+package diff
 
 import (
 	"github.com/yudai/gojsondiff"
 )
 
-func diff(required string, current string) (bool, error) {
+func Diff(required string, current string) (bool, error) {
 	if required == "" || current == "" {
 		return required != current, nil
 	}

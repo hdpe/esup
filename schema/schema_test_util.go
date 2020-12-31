@@ -1,7 +1,8 @@
-package main
+package schema
 
 import (
 	"fmt"
+	"github.com/hdpe.me/esup/testutil"
 	"strings"
 )
 
@@ -35,34 +36,34 @@ func (m *indexSetMatcher) withDefaultMeta() *indexSetMatcher {
 	return m
 }
 
-func (m *indexSetMatcher) match(actual interface{}) matchResult {
-	r := newMatchResult()
+func (m *indexSetMatcher) Match(actual interface{}) testutil.MatchResult {
+	r := testutil.NewMatchResult()
 
-	is, ok := actual.(indexSet)
+	is, ok := actual.(IndexSet)
 
 	if !ok {
-		r.reject(fmt.Sprintf("got %T, want %T", actual, indexSet{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, IndexSet{}))
 		return r
 	}
 
 	if m.name != nil {
-		if got, want := is.indexSet, *(m.name); got != want {
-			r.reject(fmt.Sprintf("got name %q, want %q", got, want))
+		if got, want := is.IndexSet, *(m.name); got != want {
+			r.Reject(fmt.Sprintf("got name %q, want %q", got, want))
 		}
 	}
 
 	if m.filePathFile != nil {
-		gotPathComponents := strings.Split(is.filePath, "/")
+		gotPathComponents := strings.Split(is.FilePath, "/")
 
 		if got, want := gotPathComponents[len(gotPathComponents)-1], *(m.filePathFile); got != want {
-			r.reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
+			r.Reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
 		}
 	}
 
 	if m.meta != nil {
-		if metaMatch := m.meta.match(is.meta); !metaMatch.matched {
-			for _, f := range metaMatch.failures {
-				r.reject(fmt.Sprintf("%v in meta", f))
+		if metaMatch := m.meta.Match(is.Meta); !metaMatch.Matched {
+			for _, f := range metaMatch.Failures {
+				r.Reject(fmt.Sprintf("%v in meta", f))
 			}
 		}
 	}
@@ -74,7 +75,7 @@ func newIndexSetMetaMatcher() *indexSetMetaMatcher {
 	return &indexSetMetaMatcher{}
 }
 
-func newIndexSetMetaMatcherLike(meta indexSetMeta) *indexSetMetaMatcher {
+func newIndexSetMetaMatcherLike(meta IndexSetMeta) *indexSetMetaMatcher {
 	return newIndexSetMetaMatcher().
 		withIndex(meta.Index).
 		withPrototype(meta.Prototype).
@@ -83,8 +84,8 @@ func newIndexSetMetaMatcherLike(meta indexSetMeta) *indexSetMetaMatcher {
 
 type indexSetMetaMatcher struct {
 	index     *string
-	prototype *indexSetMetaPrototype
-	reindex   *indexSetMetaReindex
+	prototype *IndexSetMetaPrototype
+	reindex   *IndexSetMetaReindex
 }
 
 func (m *indexSetMetaMatcher) withIndex(index string) *indexSetMetaMatcher {
@@ -92,41 +93,41 @@ func (m *indexSetMetaMatcher) withIndex(index string) *indexSetMetaMatcher {
 	return m
 }
 
-func (m *indexSetMetaMatcher) withPrototype(prototype indexSetMetaPrototype) *indexSetMetaMatcher {
+func (m *indexSetMetaMatcher) withPrototype(prototype IndexSetMetaPrototype) *indexSetMetaMatcher {
 	m.prototype = &prototype
 	return m
 }
 
-func (m *indexSetMetaMatcher) withReindex(reindex indexSetMetaReindex) *indexSetMetaMatcher {
+func (m *indexSetMetaMatcher) withReindex(reindex IndexSetMetaReindex) *indexSetMetaMatcher {
 	m.reindex = &reindex
 	return m
 }
 
-func (m *indexSetMetaMatcher) match(actual interface{}) matchResult {
-	r := newMatchResult()
+func (m *indexSetMetaMatcher) Match(actual interface{}) testutil.MatchResult {
+	r := testutil.NewMatchResult()
 
-	meta, ok := actual.(indexSetMeta)
+	meta, ok := actual.(IndexSetMeta)
 
 	if !ok {
-		r.reject(fmt.Sprintf("got %T, want %T", actual, indexSet{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, IndexSet{}))
 		return r
 	}
 
 	if m.index != nil {
 		if got, want := meta.Index, *(m.index); got != want {
-			r.reject(fmt.Sprintf("got index %q, want %q", got, want))
+			r.Reject(fmt.Sprintf("got index %q, want %q", got, want))
 		}
 	}
 
 	if m.prototype != nil {
 		if got, want := meta.Prototype, *(m.prototype); got != want {
-			r.reject(fmt.Sprintf("got prototype %v, want %v", got, want))
+			r.Reject(fmt.Sprintf("got prototype %v, want %v", got, want))
 		}
 	}
 
 	if m.reindex != nil {
 		if got, want := meta.Reindex, *(m.reindex); got != want {
-			r.reject(fmt.Sprintf("got reindex %v, want %v", got, want))
+			r.Reject(fmt.Sprintf("got reindex %v, want %v", got, want))
 		}
 	}
 
@@ -158,33 +159,33 @@ func (m *documentMatcher) withFilePathFile(file string) *documentMatcher {
 	return m
 }
 
-func (m *documentMatcher) match(actual interface{}) matchResult {
-	r := newMatchResult()
+func (m *documentMatcher) Match(actual interface{}) testutil.MatchResult {
+	r := testutil.NewMatchResult()
 
-	doc, ok := actual.(document)
+	doc, ok := actual.(Document)
 
 	if !ok {
-		r.reject(fmt.Sprintf("got %T, want %T", actual, document{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, Document{}))
 		return r
 	}
 
 	if m.indexSet != nil {
-		if got, want := doc.indexSet, *(m.indexSet); got != want {
-			r.reject(fmt.Sprintf("got indexSet %q, want %q", got, want))
+		if got, want := doc.IndexSet, *(m.indexSet); got != want {
+			r.Reject(fmt.Sprintf("got indexSet %q, want %q", got, want))
 		}
 	}
 
 	if m.name != nil {
-		if got, want := doc.name, *(m.name); got != want {
-			r.reject(fmt.Sprintf("got name %q, want %q", got, want))
+		if got, want := doc.Name, *(m.name); got != want {
+			r.Reject(fmt.Sprintf("got name %q, want %q", got, want))
 		}
 	}
 
 	if m.filePathFile != nil {
-		gotPathComponents := strings.Split(doc.filePath, "/")
+		gotPathComponents := strings.Split(doc.FilePath, "/")
 
 		if got, want := gotPathComponents[len(gotPathComponents)-1], *(m.filePathFile); got != want {
-			r.reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
+			r.Reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
 		}
 	}
 

@@ -3,6 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/hdpe.me/esup/config"
+	"github.com/hdpe.me/esup/es"
+	"github.com/hdpe.me/esup/plan"
+	"github.com/hdpe.me/esup/schema"
 	"os"
 	"strings"
 )
@@ -15,39 +19,36 @@ func main() {
 		os.Exit(0)
 	}
 
-	config, err := newConfig()
+	conf, err := config.NewConfig()
 
 	if err != nil {
 		fatalError("couldn't read configuration: %v", err)
 	}
 
-	es, err := newES(config.server)
+	esClient, err := es.NewClient(conf.Server)
 
 	if err != nil {
 		fatalError("couldn't create elasticsearch client: %v", err)
 	}
 
-	schema, err := getSchema(config, cmd.envName)
+	resSchema, err := schema.GetSchema(conf, cmd.envName)
 
 	if err != nil {
 		fatalError("couldn't get schema: %v", err)
 	}
 
-	changelog := &Changelog{
-		config: config.changelog,
-		es:     es,
-	}
+	changelog := plan.NewChangelog(conf.Changelog, esClient)
 
-	planner := newPlanner(es, config, changelog, schema, cmd.envName)
-	plan, err := planner.Plan()
+	planner := plan.NewPlanner(esClient, conf, changelog, resSchema, cmd.envName)
+	resPlan, err := planner.Plan()
 
 	if err != nil {
 		fatalError("couldn't plan update: %v", err)
 	}
 
-	logPlan(plan, config.server)
+	logPlan(resPlan, conf.Server)
 
-	if len(plan) == 0 {
+	if len(resPlan) == 0 {
 		os.Exit(0)
 	}
 
@@ -62,8 +63,8 @@ func main() {
 		}
 	}
 
-	for _, item := range plan {
-		if err = item.execute(); err != nil {
+	for _, item := range resPlan {
+		if err = item.Execute(); err != nil {
 			fatalError("couldn't execute %v: %v", item, err)
 		}
 	}
@@ -71,13 +72,13 @@ func main() {
 	println("Complete")
 }
 
-func logPlan(plan []planAction, serverConfig ServerConfig) {
+func logPlan(plan []plan.PlanAction, serverConfig config.ServerConfig) {
 	if len(plan) == 0 {
 		println("No changes")
 		return
 	}
 
-	println(fmt.Sprintf("Planned changes on %s:", serverConfig.address))
+	println(fmt.Sprintf("Planned changes on %s:\n", serverConfig.Address))
 
 	msg := ""
 
