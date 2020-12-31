@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"time"
+)
+
 const changelogIndexDef = `{
 	"mappings": {
 		"properties": {
@@ -33,7 +38,7 @@ type Changelog struct {
 	es     *ES
 }
 
-func (r *Changelog) getCurrentChangelogEntry(indexSet string, envName string) (changelogEntry, error) {
+func (r *Changelog) getCurrentChangelogEntry(resourceType string, resourceIdentifier string, envName string) (changelogEntry, error) {
 	def, err := r.es.getIndexDef(r.config.index)
 
 	if err != nil {
@@ -46,12 +51,25 @@ func (r *Changelog) getCurrentChangelogEntry(indexSet string, envName string) (c
 		}
 	}
 
-	return r.es.getChangelogEntry(r.config.index, "index_set", indexSet, envName)
+	return r.es.getChangelogEntry(r.config.index, resourceType, resourceIdentifier, envName)
 }
 
-func (r *Changelog) putCurrentChangelogEntry(indexSet string, finalName string, indexDef changelogEntry,
+func (r *Changelog) putChangelogEntry(resourceType string, resourceIdentifier string, finalName string, indexDef changelogEntry,
 	envName string) error {
 
-	return r.es.putChangelogEntry(r.config.index, "index_set", indexSet, finalName,
-		indexDef, envName)
+	body := map[string]interface{}{
+		"resource_type":       resourceType,
+		"resource_identifier": resourceIdentifier,
+		"final_name":          finalName,
+		"content":             indexDef.content,
+		"meta":                indexDef.meta,
+		"env_name":            envName,
+		"timestamp":           time.Now().UTC().Format("2006-01-02T15:04:05.006"),
+	}
+
+	if err := r.es.indexDocument(r.config.index, "", body); err != nil {
+		return fmt.Errorf("couldn't put changelog entry %v %v: %w", resourceType, resourceIdentifier, err)
+	}
+
+	return nil
 }

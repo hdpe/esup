@@ -22,6 +22,10 @@ func makePlan(es *ES, prototypeConfig PrototypeConfig, preprocessConfig Preproce
 		return nil, fmt.Errorf("couldn't get index set mutations: %w", err)
 	}
 
+	if err := appendDocumentMutations(&plan, es, preprocessConfig, changelog, schema.documents, envName); err != nil {
+		return nil, fmt.Errorf("couldn't get document mutations: %w", err)
+	}
+
 	return plan, nil
 }
 
@@ -69,71 +73,72 @@ func appendPipelineMutations(plan *[]planAction, es *ES, preprocessConfig Prepro
 func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig PrototypeConfig,
 	preprocessConfig PreprocessConfig, changelog *Changelog, indexSets []indexSet, envName string, version string) error {
 
-	for _, m := range indexSets {
-		aliasName := newAliasName(m.indexSet, envName)
+	for _, is := range indexSets {
+		aliasName := newAliasName(is.indexSet, envName)
 		existingIndices, err := es.getIndicesForAlias(aliasName)
 
 		if err != nil {
 			return fmt.Errorf("couldn't get alias %v: %w", aliasName, err)
 		}
 
-		newIndexDef, err := preprocess(m.filePath, preprocessConfig)
+		newIndexDef, err := preprocess(is.filePath, preprocessConfig)
 
 		if err != nil {
-			return fmt.Errorf("couldn't read %v: %w", m.filePath, err)
+			return fmt.Errorf("couldn't read %v: %w", is.filePath, err)
 		}
 
-		newIndexMeta, err := json.Marshal(m.meta)
+		newIndexMeta, err := json.Marshal(is.meta)
 
 		if err != nil {
-			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", m.indexSet, err)
+			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", is.indexSet, err)
 		}
 
-		changelogEntry, err := changelog.getCurrentChangelogEntry(m.indexSet, envName)
+		changelogEntry, err := changelog.getCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
+			envName)
 
 		if err != nil {
-			return fmt.Errorf("couldn't get changelog entry for %v: %w", aliasName, err)
+			return fmt.Errorf("couldn't get changelog entry for %v: %w", is.ResourceIdentifier(), err)
 		}
 
-		changed, err := indexSetDiff(newIndexDef, string(newIndexMeta), changelogEntry)
+		changed, err := changelogDiff(newIndexDef, string(newIndexMeta), changelogEntry)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("couldn't diff %v with changelog: %w", is.ResourceIdentifier(), err)
 		}
 
-		if !planChangesPipeline(*plan, m.meta.Reindex.Pipeline, envName) && !changed {
+		if !planChangesPipeline(*plan, is.meta.Reindex.Pipeline, envName) && !changed {
 			continue
 		}
 
-		staticIndex := m.meta.Index != ""
+		staticIndex := is.meta.Index != ""
 
 		var indexName string
 
 		if staticIndex {
-			indexName = m.meta.Index
+			indexName = is.meta.Index
 		} else {
-			indexName = newIndexName(m.indexSet, envName, version)
+			indexName = newIndexName(is.indexSet, envName, version)
 		}
 
-		pipeline := newPipelineId(m.meta.Reindex.Pipeline, envName)
+		pipeline := newPipelineId(is.meta.Reindex.Pipeline, envName)
 
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
 				es:         es,
 				name:       indexName,
-				indexSet:   m.indexSet,
+				indexSet:   is.indexSet,
 				definition: newIndexDef,
 			})
 		}
 
 		if existingIndices == nil {
 			if !staticIndex {
-				if e := prototypeConfig.environment; e != "" && e != envName && !m.meta.Prototype.Disabled {
+				if e := prototypeConfig.environment; e != "" && e != envName && !is.meta.Prototype.Disabled {
 					*plan = append(*plan, &reindex{
 						es:       es,
-						from:     newAliasName(m.indexSet, e),
+						from:     newAliasName(is.indexSet, e),
 						to:       indexName,
-						maxDocs:  m.meta.Prototype.MaxDocs,
+						maxDocs:  is.meta.Prototype.MaxDocs,
 						pipeline: pipeline,
 					})
 				}
@@ -165,13 +170,63 @@ func appendIndexSetMutations(plan *[]planAction, es *ES, prototypeConfig Prototy
 			}
 		}
 
-		*plan = append(*plan, &writeIndexSetChangelogEntry{
-			changelog:  changelog,
-			name:       indexName,
-			indexSet:   m.indexSet,
-			definition: newIndexDef,
-			meta:       string(newIndexMeta),
-			envName:    envName,
+		*plan = append(*plan, &writeChangelogEntry{
+			changelog:          changelog,
+			resourceType:       "index_set",
+			resourceIdentifier: is.ResourceIdentifier(),
+			finalName:          indexName,
+			definition:         newIndexDef,
+			meta:               string(newIndexMeta),
+			envName:            envName,
+		})
+	}
+
+	return nil
+}
+
+func appendDocumentMutations(plan *[]planAction, es *ES,
+	preprocessConfig PreprocessConfig, changelog *Changelog, docs []document, envName string) error {
+
+	for _, doc := range docs {
+		final, err := preprocess(doc.filePath, preprocessConfig)
+
+		if err != nil {
+			return fmt.Errorf("couldn't read %v: %w", doc.filePath, err)
+		}
+
+		changelogEntry, err := changelog.getCurrentChangelogEntry("document", doc.ResourceIdentifier(),
+			envName)
+
+		if err != nil {
+			return fmt.Errorf("couldn't get changelog entry for %v: %w", doc.ResourceIdentifier(), err)
+		}
+
+		changed, err := changelogDiff(final, "", changelogEntry)
+
+		if err != nil {
+			return fmt.Errorf("couldn't diff %v with changelog: %w", doc.ResourceIdentifier(), err)
+		}
+
+		if !changed {
+			continue
+		}
+
+		index := newAliasName(doc.indexSet, envName)
+
+		*plan = append(*plan, &indexDocument{
+			es:       es,
+			id:       doc.name,
+			index:    index,
+			document: final,
+		})
+
+		*plan = append(*plan, &writeChangelogEntry{
+			changelog:          changelog,
+			resourceType:       "document",
+			resourceIdentifier: doc.ResourceIdentifier(),
+			finalName:          doc.name,
+			definition:         final,
+			envName:            envName,
 		})
 	}
 
@@ -194,12 +249,12 @@ func newPipelineId(name string, envName string) string {
 	return fmt.Sprintf("%v-%v", envName, name)
 }
 
-func indexSetDiff(newIndexDef string, newIndexMeta string, changelogEntry changelogEntry) (bool, error) {
+func changelogDiff(newResourceDef string, newResourceMeta string, changelogEntry changelogEntry) (bool, error) {
 	if !changelogEntry.present {
 		return true, nil
 	}
 
-	changed, err := diff(newIndexDef, changelogEntry.content)
+	changed, err := diff(newResourceDef, changelogEntry.content)
 
 	if err != nil {
 		return false, fmt.Errorf("couldn't diff resource content with existing: %w", err)
@@ -209,7 +264,7 @@ func indexSetDiff(newIndexDef string, newIndexMeta string, changelogEntry change
 		return true, nil
 	}
 
-	changed, err = diff(newIndexMeta, changelogEntry.meta)
+	changed, err = diff(newResourceMeta, changelogEntry.meta)
 
 	if err != nil {
 		return false, fmt.Errorf("couldn't diff resource meta with existing: %w", err)

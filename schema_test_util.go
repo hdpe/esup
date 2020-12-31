@@ -35,31 +35,34 @@ func (m *indexSetMatcher) withDefaultMeta() *indexSetMatcher {
 	return m
 }
 
-func (m *indexSetMatcher) match(is indexSet) matchResult {
-	r := matchResult{matched: true, failures: make([]string, 0)}
+func (m *indexSetMatcher) match(actual interface{}) matchResult {
+	r := newMatchResult()
+
+	is, ok := actual.(indexSet)
+
+	if !ok {
+		r.reject(fmt.Sprintf("got %T, want %T", actual, indexSet{}))
+		return r
+	}
 
 	if m.name != nil {
-		if want := *(m.name); is.indexSet != want {
-			r.matched = false
-			r.failures = append(r.failures, fmt.Sprintf("got name %q, want %q", is.indexSet, want))
+		if got, want := is.indexSet, *(m.name); got != want {
+			r.reject(fmt.Sprintf("got name %q, want %q", got, want))
 		}
 	}
 
 	if m.filePathFile != nil {
 		gotPathComponents := strings.Split(is.filePath, "/")
-		got := gotPathComponents[len(gotPathComponents)-1]
 
-		if want := *(m.filePathFile); got != want {
-			r.matched = false
-			r.failures = append(r.failures, fmt.Sprintf("got filePath file %q, want %q", got, want))
+		if got, want := gotPathComponents[len(gotPathComponents)-1], *(m.filePathFile); got != want {
+			r.reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
 		}
 	}
 
 	if m.meta != nil {
 		if metaMatch := m.meta.match(is.meta); !metaMatch.matched {
-			r.matched = false
 			for _, f := range metaMatch.failures {
-				r.failures = append(r.failures, fmt.Sprintf("%v in meta", f))
+				r.reject(fmt.Sprintf("%v in meta", f))
 			}
 		}
 	}
@@ -99,27 +102,89 @@ func (m *indexSetMetaMatcher) withReindex(reindex indexSetMetaReindex) *indexSet
 	return m
 }
 
-func (m *indexSetMetaMatcher) match(meta indexSetMeta) matchResult {
-	r := matchResult{matched: true, failures: make([]string, 0)}
+func (m *indexSetMetaMatcher) match(actual interface{}) matchResult {
+	r := newMatchResult()
+
+	meta, ok := actual.(indexSetMeta)
+
+	if !ok {
+		r.reject(fmt.Sprintf("got %T, want %T", actual, indexSet{}))
+		return r
+	}
 
 	if m.index != nil {
-		if want := *(m.index); meta.Index != want {
-			r.matched = false
-			r.failures = append(r.failures, fmt.Sprintf("got index %q, want %q", meta.Index, want))
+		if got, want := meta.Index, *(m.index); got != want {
+			r.reject(fmt.Sprintf("got index %q, want %q", got, want))
 		}
 	}
 
 	if m.prototype != nil {
-		if want := *(m.prototype); meta.Prototype != want {
-			r.matched = false
-			r.failures = append(r.failures, fmt.Sprintf("got prototype %v, want %v", meta.Prototype, want))
+		if got, want := meta.Prototype, *(m.prototype); got != want {
+			r.reject(fmt.Sprintf("got prototype %v, want %v", got, want))
 		}
 	}
 
 	if m.reindex != nil {
-		if want := *(m.reindex); meta.Reindex != want {
-			r.matched = false
-			r.failures = append(r.failures, fmt.Sprintf("got reindex %v, want %v", meta.Reindex, want))
+		if got, want := meta.Reindex, *(m.reindex); got != want {
+			r.reject(fmt.Sprintf("got reindex %v, want %v", got, want))
+		}
+	}
+
+	return r
+}
+
+func newDocumentMatcher() *documentMatcher {
+	return &documentMatcher{}
+}
+
+type documentMatcher struct {
+	indexSet     *string
+	name         *string
+	filePathFile *string
+}
+
+func (m *documentMatcher) withIndexSet(indexSet string) *documentMatcher {
+	m.indexSet = &indexSet
+	return m
+}
+
+func (m *documentMatcher) withName(name string) *documentMatcher {
+	m.name = &name
+	return m
+}
+
+func (m *documentMatcher) withFilePathFile(file string) *documentMatcher {
+	m.filePathFile = &file
+	return m
+}
+
+func (m *documentMatcher) match(actual interface{}) matchResult {
+	r := newMatchResult()
+
+	doc, ok := actual.(document)
+
+	if !ok {
+		r.reject(fmt.Sprintf("got %T, want %T", actual, document{}))
+		return r
+	}
+
+	if m.indexSet != nil {
+		if got, want := doc.indexSet, *(m.indexSet); got != want {
+			r.reject(fmt.Sprintf("got indexSet %q, want %q", got, want))
+		}
+	}
+
+	if m.name != nil {
+		if got, want := doc.name, *(m.name); got != want {
+			r.reject(fmt.Sprintf("got name %q, want %q", got, want))
+		}
+	}
+
+	if m.filePathFile != nil {
+		gotPathComponents := strings.Split(doc.filePath, "/")
+
+		if got, want := gotPathComponents[len(gotPathComponents)-1], *(m.filePathFile); got != want {
+			r.reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
 		}
 	}
 

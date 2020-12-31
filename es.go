@@ -9,7 +9,6 @@ import (
 	"github.com/tidwall/gjson"
 	"io"
 	"strings"
-	"time"
 )
 
 func newES(serverConfig ServerConfig) (*ES, error) {
@@ -115,33 +114,25 @@ func (r *ES) getChangelogEntry(indexName string, resourceType string, resourceId
 	}, nil
 }
 
-func (r *ES) putChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
-	finalName string, indexDef changelogEntry, envName string) error {
-
-	body := map[string]interface{}{
-		"resource_type":       resourceType,
-		"resource_identifier": resourceIdentifier,
-		"final_name":          finalName,
-		"content":             indexDef.content,
-		"meta":                indexDef.meta,
-		"env_name":            envName,
-		"timestamp":           time.Now().UTC().Format("2006-01-02T15:04:05.006"),
-	}
-
+func (r *ES) indexDocument(indexName string, id string, body map[string]interface{}) error {
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		return fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
-	res, err := r.client.Index(indexName, &buf)
+	res, err := r.client.Index(indexName, &buf, func(request *esapi.IndexRequest) {
+		if id != "" {
+			request.DocumentID = id
+		}
+	})
 
 	if err != nil {
 		return err
 	}
 
 	if err = verifyResponse(res); err != nil {
-		return fmt.Errorf("couldn't put changelog entry: %w", err)
+		return fmt.Errorf("couldn't index document: %w", err)
 	}
 
 	return nil

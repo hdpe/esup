@@ -52,14 +52,15 @@ $ esup migrate dev
 ### Result
 
 ```
-Planned changes:
+Planned changes on http://localhost:9200:
+
 - put pipeline dev-pipeline1
 - create index dev-index1_20201207104530
 - create alias dev-index1 -> dev-index1_20201207104530
-- write index set changelog entry for index1
+- write index set changelog entry for dev:index1
 - create index dev-index2_20201207104530
 - create alias dev-index2 -> dev-index2_20201207104530
-- write index set changelog entry for index2
+- write index set changelog entry for dev:index2
 
 Confirm [Y/n]: Y
 Complete
@@ -95,6 +96,9 @@ and `pipeline1-default.json`.
 Corresponds to a timestamped _index_ and an associated _alias_.
 Updates will create a new index, reindex to the new index and 
 update the alias.
+
+Alternatively index sets can specify a static index 
+to which their alias always points.
 
 #### Resource
 
@@ -144,6 +148,28 @@ Request body of Elasticsearch [Put pipeline API](https://www.elastic.co/guide/en
 {
   "description" : ...,
   "processors" : [ ... ]
+}
+```
+
+#### Meta
+
+No meta parameters supported.
+
+
+### Document
+
+Corresponds to a _document_ in an index.
+
+#### Resource
+
+`{indexSetName}-{name}-{environment}.json`
+
+Request body of Elasticsearch [Index API](https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html).
+
+```json
+{
+  "key": "value",
+  ...
 }
 ```
 
@@ -223,6 +249,8 @@ indexSets:
   directory: ...
 pipelines:
   directory: ...
+documents:
+  directory: ...
 preprocess:
   includesDirectory: ...
 ```
@@ -234,6 +262,7 @@ preprocess:
 |prototype.environment|PROTOTYPE_ENVIRONMENT|string|reindex all new index sets from corresponding index in this environment||
 |indexSets.directory|INDEXSETS_DIRECTORY|string|directory containing index set resources|`"./indexSets"`|
 |pipelines.directory|PIPELINES_DIRECTORY|string|directory containing pipeline resources|`"./pipelines"`|
+|documents.directory|DOCUMENTS_DIRECTORY|string|directory containing document resources|`"./documents"`|
 |preprocess.includesDirectory|PREPROCESS_INCLUDESDIRECTORY|string|directory containing resource includes|`"./includes"`|
 
 ## Development

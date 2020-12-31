@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	viperlib "github.com/spf13/viper"
 	"os"
 	"sort"
+	"strings"
 )
 
 func getSchema(config Config, envName string) (schema, error) {
@@ -20,9 +22,16 @@ func getSchema(config Config, envName string) (schema, error) {
 		return schema{}, err
 	}
 
+	docs, err := getDocuments(config.documents, envName)
+
+	if err != nil {
+		return schema{}, err
+	}
+
 	return schema{
 		indexSets: indexSets,
 		pipelines: pipelines,
+		documents: docs,
 	}, nil
 }
 
@@ -148,7 +157,6 @@ func getPipelines(config PipelinesConfig, envName string) ([]pipeline, error) {
 	for _, r := range res {
 		pipelines = append(pipelines, pipeline{
 			name:     r.identifier,
-			envName:  r.envName,
 			filePath: r.filePath,
 		})
 	}
@@ -163,6 +171,40 @@ func getPipelines(config PipelinesConfig, envName string) ([]pipeline, error) {
 	return pipelines, nil
 }
 
+func getDocuments(config DocumentsConfig, envName string) ([]document, error) {
+	res, err := getEnvironmentResources(config.directory, envName, "json")
+
+	if err != nil {
+		return nil, err
+	}
+
+	docs := make([]document, 0)
+	for _, doc := range res {
+		lastDashIdx := strings.LastIndex(doc.identifier, "-")
+
+		if lastDashIdx < 1 || lastDashIdx == len(doc.identifier)-1 {
+			return docs, errors.New("document filenames should look like {indexSet}-{name}-{environment}.json")
+		}
+
+		docs = append(docs, document{
+			indexSet: doc.identifier[:lastDashIdx],
+			name:     doc.identifier[lastDashIdx+1:],
+			filePath: doc.filePath,
+		})
+	}
+
+	sort.Slice(docs, func(i, j int) bool {
+		if docs[i].indexSet < docs[j].indexSet {
+			return true
+		} else if docs[i].name < docs[j].name {
+			return true
+		}
+		return false
+	})
+
+	return docs, nil
+}
+
 func defaultMeta() indexSetMeta {
 	return indexSetMeta{
 		Prototype: indexSetMetaPrototype{
@@ -175,11 +217,20 @@ func defaultMeta() indexSetMeta {
 type schema struct {
 	indexSets []indexSet
 	pipelines []pipeline
+	documents []document
+}
+
+func (s schema) getIndexSet(name string) (indexSet, error) {
+	for _, is := range s.indexSets {
+		if is.indexSet == name {
+			return is, nil
+		}
+	}
+	return indexSet{}, errors.New(fmt.Sprintf("no such index set %q", name))
 }
 
 type pipeline struct {
 	name     string
-	envName  string
 	filePath string
 }
 
@@ -187,6 +238,20 @@ type indexSet struct {
 	indexSet string
 	filePath string
 	meta     indexSetMeta
+}
+
+func (is indexSet) ResourceIdentifier() string {
+	return is.indexSet
+}
+
+type document struct {
+	indexSet string
+	name     string
+	filePath string
+}
+
+func (d document) ResourceIdentifier() string {
+	return fmt.Sprintf("%v/%v", d.indexSet, d.name)
 }
 
 // these fields are exported because we marshal them as JSON for the diff

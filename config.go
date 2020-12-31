@@ -12,6 +12,7 @@ func newConfig() (Config, error) {
 	viper.SetDefault("changelog.index", "esup-changelog0")
 	viper.SetDefault("pipelines.directory", "./pipelines")
 	viper.SetDefault("indexSets.directory", "./indexSets")
+	viper.SetDefault("documents.directory", "./documents")
 	viper.SetDefault("preprocess.includesDirectory", "./includes")
 
 	viper.SetConfigType("yml")
@@ -37,6 +38,7 @@ func newConfig() (Config, error) {
 		ChangelogConfig{index: viper.GetString("changelog.index")},
 		IndexSetsConfig{directory: viper.GetString("indexSets.directory")},
 		PipelinesConfig{directory: viper.GetString("pipelines.directory")},
+		DocumentsConfig{directory: viper.GetString("documents.directory")},
 		PreprocessConfig{includesDirectory: viper.GetString("preprocess.includesDirectory")},
 	}, nil
 }
@@ -47,6 +49,7 @@ type Config struct {
 	changelog  ChangelogConfig
 	indexSets  IndexSetsConfig
 	pipelines  PipelinesConfig
+	documents  DocumentsConfig
 	preprocess PreprocessConfig
 }
 
@@ -68,6 +71,10 @@ type IndexSetsConfig struct {
 }
 
 type PipelinesConfig struct {
+	directory string
+}
+
+type DocumentsConfig struct {
 	directory string
 }
 

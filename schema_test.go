@@ -8,15 +8,15 @@ import (
 	"testing"
 )
 
-func Test_getSchema_resolvesEnvironmentIndices(t *testing.T) {
+func Test_getSchema_resolvesResources(t *testing.T) {
 	testCases := []indexTestCase{
 		{
 			desc:    "resolves resource from file",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.json": "",
+				"indexSets/x-env1.json": "",
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withDefaultMeta(),
@@ -26,14 +26,14 @@ func Test_getSchema_resolvesEnvironmentIndices(t *testing.T) {
 			desc:    "resolves resource from meta, fully specified with reindexing",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `
+				"indexSets/x-env1.meta.yml": `
 prototype:
   disabled: true
   maxDocs: 1
 reindex:
   pipeline: p1`,
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withMeta(
@@ -48,10 +48,10 @@ reindex:
 			desc:    "resolves resource from meta, fully specified with index",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `
+				"indexSets/x-env1.meta.yml": `
 index: "y"`,
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withMeta(
@@ -64,7 +64,7 @@ index: "y"`,
 			desc:    "returns error if prototype and index both specified",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `
+				"indexSets/x-env1.meta.yml": `
 index: "y"
 prototype:
   disabled: true`,
@@ -75,7 +75,7 @@ prototype:
 			desc:    "returns error if reindex and index both specified",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.meta.yml": `
+				"indexSets/x-env1.meta.yml": `
 index: "y"
 reindex:
   pipeline: p1`,
@@ -86,12 +86,12 @@ reindex:
 			desc:    "resolves resource from file and meta",
 			envName: "env1",
 			files: map[string]string{
-				"x-env1.json": "",
-				"x-env1.meta.yml": `
+				"indexSets/x-env1.json": "",
+				"indexSets/x-env1.meta.yml": `
 reindex:
   pipeline: p1`,
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-env1.json").
@@ -105,9 +105,9 @@ reindex:
 			desc:    "resolves resource from default environment file",
 			envName: "env1",
 			files: map[string]string{
-				"x-default.json": "",
+				"indexSets/x-default.json": "",
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-default.json").
@@ -118,13 +118,13 @@ reindex:
 			desc:    "resolves resource from merged environment and default environment with meta",
 			envName: "env1",
 			files: map[string]string{
-				"x-default.json": "",
-				"x-env1.json":    "",
-				"x-default.meta.yml": `
+				"indexSets/x-default.json": "",
+				"indexSets/x-env1.json":    "",
+				"indexSets/x-default.meta.yml": `
 reindex:
   pipeline: p1`,
 			},
-			expected: []*indexSetMatcher{
+			expected: []matcher{
 				newIndexSetMatcher().
 					withName("x").
 					withFilePathFile("x-env1.json").
@@ -133,6 +133,27 @@ reindex:
 							withReindex(indexSetMetaReindex{Pipeline: "p1"}),
 					),
 			},
+		},
+		{
+			desc:    "resolves document with index set",
+			envName: "env1",
+			files: map[string]string{
+				"indexSets/x-env1.json":   "",
+				"documents/x-y-env1.json": "",
+			},
+			expected: []matcher{
+				newIndexSetMatcher().withName("x"),
+				newDocumentMatcher().withIndexSet("x").withName("y").withFilePathFile("x-y-env1.json"),
+			},
+		},
+		{
+			desc:    "returns error if document filename doesn't have two components",
+			envName: "env1",
+			files: map[string]string{
+				"indexSets/x-env1.json": "",
+				"documents/x-env1.json": "",
+			},
+			expectedErr: errors.New("document filenames should look like {indexSet}-{name}-{environment}.json"),
 		},
 	}
 
@@ -154,14 +175,22 @@ reindex:
 			}()
 
 			for file, content := range tc.files {
-				if err := ioutil.WriteFile(path.Join(dir, file), []byte(content), 0644); err != nil {
+				file := path.Join(dir, file)
+
+				if err := os.MkdirAll(path.Dir(file), 0755); err != nil {
+					t.Error(err)
+					return
+				}
+
+				if err := ioutil.WriteFile(file, []byte(content), 0644); err != nil {
 					t.Error(err)
 					return
 				}
 			}
 
 			config := Config{
-				indexSets: IndexSetsConfig{directory: dir},
+				indexSets: IndexSetsConfig{directory: path.Join(dir, "indexSets")},
+				documents: DocumentsConfig{directory: path.Join(dir, "documents")},
 			}
 
 			schema, err := getSchema(config, tc.envName)
@@ -170,7 +199,18 @@ reindex:
 				t.Errorf("got error %v; want %v", err, tc.expectedErr)
 			}
 
-			got := schema.indexSets
+			got := make([]interface{}, 0)
+			for _, is := range schema.indexSets {
+				got = append(got, is)
+			}
+			for _, doc := range schema.documents {
+				got = append(got, doc)
+			}
+
+			if gotCount, wantCount := len(got), len(tc.expected); gotCount != wantCount {
+				t.Errorf("got %v resource(s); want %v", gotCount, wantCount)
+				return
+			}
 
 			for i, matcher := range tc.expected {
 				result := matcher.match(got[i])
@@ -187,6 +227,6 @@ type indexTestCase struct {
 	desc        string
 	envName     string
 	files       map[string]string
-	expected    []*indexSetMatcher
+	expected    []matcher
 	expectedErr error
 }

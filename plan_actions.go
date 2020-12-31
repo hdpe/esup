@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/cheggaaa/pb/v3"
 	"sync"
@@ -22,22 +23,23 @@ func (r *createIndex) String() string {
 	return fmt.Sprintf("create index %v", r.name)
 }
 
-type writeIndexSetChangelogEntry struct {
-	changelog  *Changelog
-	name       string
-	indexSet   string
-	definition string
-	meta       string
-	envName    string
+type writeChangelogEntry struct {
+	changelog          *Changelog
+	resourceType       string
+	resourceIdentifier string
+	finalName          string
+	definition         string
+	meta               string
+	envName            string
 }
 
-func (r *writeIndexSetChangelogEntry) execute() error {
-	return r.changelog.putCurrentChangelogEntry(r.indexSet, r.name,
+func (r *writeChangelogEntry) execute() error {
+	return r.changelog.putChangelogEntry(r.resourceType, r.resourceIdentifier, r.finalName,
 		changelogEntry{content: r.definition, meta: r.meta}, r.envName)
 }
 
-func (r *writeIndexSetChangelogEntry) String() string {
-	return fmt.Sprintf("write index set changelog entry for %v", r.indexSet)
+func (r *writeChangelogEntry) String() string {
+	return fmt.Sprintf("write %v changelog entry for %v:%v", r.resourceType, r.envName, r.resourceIdentifier)
 }
 
 type reindex struct {
@@ -159,4 +161,29 @@ func (r *putPipeline) execute() error {
 
 func (r *putPipeline) String() string {
 	return fmt.Sprintf("put pipeline %v", r.id)
+}
+
+type indexDocument struct {
+	es       *ES
+	index    string
+	id       string
+	document string
+}
+
+func (r *indexDocument) execute() error {
+	var body map[string]interface{}
+
+	if err := json.Unmarshal([]byte(r.document), &body); err != nil {
+		return fmt.Errorf("couldn't index document %v/%v: document to index wasn't valid json: %w", r.index, r.id, err)
+	}
+
+	if err := r.es.indexDocument(r.index, r.id, body); err != nil {
+		return fmt.Errorf("couldn't index document %v/%v: %w", r.index, r.id, err)
+	}
+
+	return nil
+}
+
+func (r *indexDocument) String() string {
+	return fmt.Sprintf("index document %v/%v", r.index, r.id)
 }
