@@ -1,23 +1,32 @@
 package schema
 
 import (
-	"errors"
 	"fmt"
 )
 
 type Schema struct {
+	EnvName   string
 	IndexSets []IndexSet
 	Pipelines []Pipeline
 	Documents []Document
 }
 
-func (s Schema) getIndexSet(name string) (IndexSet, error) {
+func (s Schema) GetIndexSet(name string) (IndexSet, error) {
 	for _, is := range s.IndexSets {
 		if is.IndexSet == name {
 			return is, nil
 		}
 	}
-	return IndexSet{}, errors.New(fmt.Sprintf("no such index set %q", name))
+	return IndexSet{}, fmt.Errorf("no such index set %q", name)
+}
+
+func (s Schema) GetDocument(identifier string) (Document, error) {
+	for _, doc := range s.Documents {
+		if doc.ResourceIdentifier() == identifier {
+			return doc, nil
+		}
+	}
+	return Document{}, fmt.Errorf("no such document %v", identifier)
 }
 
 type Pipeline struct {

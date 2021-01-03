@@ -13,7 +13,14 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if _, e := fmt.Fprintln(os.Stderr, err); e != nil {
+			panic(e)
+		}
 		os.Exit(1)
 	}
+}
+
+func fatalError(format string, a ...interface{}) {
+	println(fmt.Sprintf(format, a...))
+	os.Exit(1)
 }

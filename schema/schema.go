@@ -30,6 +30,7 @@ func GetSchema(config config.Config, envName string) (Schema, error) {
 	}
 
 	return Schema{
+		EnvName:   envName,
 		IndexSets: indexSets,
 		Pipelines: pipelines,
 		Documents: docs,

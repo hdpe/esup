@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/hdpe.me/esup/config"
-	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/plan"
-	"github.com/hdpe.me/esup/schema"
 	"github.com/spf13/cobra"
 	"os"
 	"regexp"
@@ -32,34 +30,16 @@ var migrateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		envName := args[0]
 
-		conf, err := config.NewConfig()
+		ctx := newContext(envName)
 
-		if err != nil {
-			fatalError("couldn't read configuration: %v", err)
-		}
-
-		esClient, err := es.NewClient(conf.Server)
-
-		if err != nil {
-			fatalError("couldn't create elasticsearch client: %v", err)
-		}
-
-		resSchema, err := schema.GetSchema(conf, envName)
-
-		if err != nil {
-			fatalError("couldn't get schema: %v", err)
-		}
-
-		changelog := plan.NewChangelog(conf.Changelog, esClient)
-
-		planner := plan.NewPlanner(esClient, conf, changelog, resSchema, envName)
+		planner := plan.NewPlanner(ctx.es, ctx.conf, ctx.changelog, ctx.schema, ctx.proc)
 		resPlan, err := planner.Plan()
 
 		if err != nil {
 			fatalError("couldn't plan update: %v", err)
 		}
 
-		logPlan(resPlan, conf.Server)
+		logPlan(resPlan, ctx.conf.Server)
 
 		if len(resPlan) == 0 {
 			os.Exit(0)
@@ -109,9 +89,4 @@ func validateEnv(str string) error {
 		return fmt.Errorf("wanted string matching %v", p)
 	}
 	return nil
-}
-
-func fatalError(format string, a ...interface{}) {
-	println(fmt.Sprintf(format, a...))
-	os.Exit(1)
 }

@@ -6,12 +6,15 @@ import (
 	"github.com/hdpe.me/esup/config"
 	"github.com/hdpe.me/esup/diff"
 	"github.com/hdpe.me/esup/es"
+	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
 	"reflect"
 	"time"
 )
 
-func NewPlanner(es *es.Client, config config.Config, changelog *Changelog, s schema.Schema, envName string) *Planner {
+func NewPlanner(es *es.Client, config config.Config, changelog *resource.Changelog, s schema.Schema,
+	proc *resource.Preprocessor) *Planner {
+
 	version := time.Now().UTC().Format("20060102150405")
 
 	return &Planner{
@@ -19,7 +22,8 @@ func NewPlanner(es *es.Client, config config.Config, changelog *Changelog, s sch
 		config:    config,
 		changelog: changelog,
 		schema:    s,
-		envName:   envName,
+		proc:      proc,
+		envName:   s.EnvName,
 		version:   version,
 	}
 }
@@ -27,8 +31,9 @@ func NewPlanner(es *es.Client, config config.Config, changelog *Changelog, s sch
 type Planner struct {
 	es        *es.Client
 	config    config.Config
-	changelog *Changelog
+	changelog *resource.Changelog
 	schema    schema.Schema
+	proc      *resource.Preprocessor
 	envName   string
 	version   string
 }
@@ -113,7 +118,7 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w", is.IndexSet, err)
 		}
 
-		changelogEntry, err := r.changelog.getCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
+		changelogEntry, err := r.changelog.GetCurrentChangelogEntry("index_set", is.ResourceIdentifier(),
 			r.envName)
 
 		if err != nil {
@@ -213,7 +218,7 @@ func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 			return nil
 		}
 
-		changelogEntry, err := r.changelog.getCurrentChangelogEntry("document", doc.ResourceIdentifier(),
+		changelogEntry, err := r.changelog.GetCurrentChangelogEntry("document", doc.ResourceIdentifier(),
 			r.envName)
 
 		if err != nil {
@@ -253,7 +258,7 @@ func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 }
 
 func (r *Planner) preprocess(filePath string) (string, error) {
-	newDef, err := preprocess(filePath, r.config.Preprocess)
+	newDef, err := r.proc.Preprocess(filePath)
 
 	if err != nil {
 		return "", fmt.Errorf("couldn't read %v: %w", filePath, err)

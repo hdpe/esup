@@ -1,4 +1,4 @@
-package plan
+package resource
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ type Changelog struct {
 	es     *es.Client
 }
 
-func (r *Changelog) getCurrentChangelogEntry(resourceType string, resourceIdentifier string, envName string) (es.ChangelogEntry, error) {
+func (r *Changelog) GetCurrentChangelogEntry(resourceType string, resourceIdentifier string, envName string) (es.ChangelogEntry, error) {
 	def, err := r.es.GetIndexDef(r.config.Index)
 
 	if err != nil {
@@ -63,15 +63,15 @@ func (r *Changelog) getCurrentChangelogEntry(resourceType string, resourceIdenti
 	return r.es.GetChangelogEntry(r.config.Index, resourceType, resourceIdentifier, envName)
 }
 
-func (r *Changelog) putChangelogEntry(resourceType string, resourceIdentifier string, finalName string, indexDef es.ChangelogEntry,
-	envName string) error {
+func (r *Changelog) PutChangelogEntry(resourceType string, resourceIdentifier string, finalName string,
+	entry es.ChangelogEntry, envName string) error {
 
 	body := map[string]interface{}{
 		"resource_type":       resourceType,
 		"resource_identifier": resourceIdentifier,
 		"final_name":          finalName,
-		"content":             indexDef.Content,
-		"meta":                indexDef.Meta,
+		"content":             entry.Content,
+		"meta":                entry.Meta,
 		"env_name":            envName,
 		"timestamp":           time.Now().UTC().Format("2006-01-02T15:04:05.006"),
 	}

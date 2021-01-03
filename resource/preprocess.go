@@ -1,4 +1,4 @@
-package plan
+package resource
 
 import (
 	"bytes"
@@ -10,7 +10,15 @@ import (
 	"text/template"
 )
 
-func preprocess(filename string, config config.PreprocessConfig) (string, error) {
+func NewPreprocessor(conf config.PreprocessConfig) *Preprocessor {
+	return &Preprocessor{conf: conf}
+}
+
+type Preprocessor struct {
+	conf config.PreprocessConfig
+}
+
+func (r *Preprocessor) Preprocess(filename string) (string, error) {
 	if filename == "" {
 		return "", nil
 	}
@@ -25,7 +33,7 @@ func preprocess(filename string, config config.PreprocessConfig) (string, error)
 
 	funcMap := template.FuncMap{
 		"include": func(name string) string {
-			filename := path.Join(config.IncludesDirectory, fmt.Sprintf("%v.json", name))
+			filename := path.Join(r.conf.IncludesDirectory, fmt.Sprintf("%v.json", name))
 			b, err := ioutil.ReadFile(filename)
 
 			if err != nil {

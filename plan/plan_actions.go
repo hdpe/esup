@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/cheggaaa/pb/v3"
 	"github.com/hdpe.me/esup/es"
+	"github.com/hdpe.me/esup/resource"
 	"sync"
 	"time"
 )
@@ -25,7 +26,7 @@ func (r *createIndex) String() string {
 }
 
 type writeChangelogEntry struct {
-	changelog          *Changelog
+	changelog          *resource.Changelog
 	resourceType       string
 	resourceIdentifier string
 	finalName          string
@@ -35,7 +36,7 @@ type writeChangelogEntry struct {
 }
 
 func (r *writeChangelogEntry) Execute() error {
-	return r.changelog.putChangelogEntry(r.resourceType, r.resourceIdentifier, r.finalName,
+	return r.changelog.PutChangelogEntry(r.resourceType, r.resourceIdentifier, r.finalName,
 		es.ChangelogEntry{Content: r.definition, Meta: r.meta}, r.envName)
 }
 
