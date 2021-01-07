@@ -19,14 +19,5 @@ deploy:
     skip_cleanup: true
     overwrite: true
   - provider: script
-    script: >-
-      bash -c 'docker build -f circleci.dockerfile -t esup-circleci linux/amd64 &&
-        {
-          docker tag esup-circleci hdpe/esup-circleci:latest || exit 1;
-          if [ -n "${TRAVIS_TAG}" ]; then
-            docker tag esup-circleci hdpe/esup-circleci:${TRAVIS_TAG} || exit 1;
-          fi
-        } &&
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin &&
-        docker push -a hdpe/circleci;'
+    script: bash .travis/deploy-circleci-image
     skip_cleanup: true

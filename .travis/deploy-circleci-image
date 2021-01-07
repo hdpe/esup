@@ -1,0 +1,21 @@
+#!/bin/bash
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+
+REPO_NAME="hdpe/esup-circleci"
+
+docker build -f ../circleci.dockerfile -t esup-circleci ../linux/amd64 &&
+  {
+    docker tag esup-circleci "${REPO_NAME}:latest" || exit 1
+
+    if [ -n "${TRAVIS_TAG}" ]; then
+      docker tag esup-circleci "${REPO_NAME}:${TRAVIS_TAG}" || exit 1
+    fi
+  } &&
+  echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin &&
+  {
+    docker push "${REPO_NAME}:latest" || exit 1
+
+    if [ -n "${TRAVIS_TAG}" ]; then
+      docker push "${REPO_NAME}:${TRAVIS_TAG}" || exit 1
+    fi
+  }
