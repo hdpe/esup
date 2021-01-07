@@ -1,5 +1,7 @@
 # esup
 
+[![Build Status](https://www.travis-ci.com/hdpe/esup.svg?branch=master)](https://www.travis-ci.com/hdpe/esup)
+
 Elasticsearch schema migrator, inspired by Flyway, 
 Liquibase etc., but as a standalone executable.
 
