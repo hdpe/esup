@@ -29,7 +29,7 @@ var importCmd = &cobra.Command{
 
 		ctx := newContext(envName)
 
-		i := imp.NewImporter(ctx.changelog, ctx.schema, ctx.proc)
+		i := imp.NewImporter(ctx.Changelog, ctx.Schema, ctx.Proc)
 
 		err := i.ImportResource(resourceType, resourceIdentifier)
 

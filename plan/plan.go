@@ -25,6 +25,7 @@ func NewPlanner(es *es.Client, config config.Config, changelog *resource.Changel
 		proc:      proc,
 		envName:   s.EnvName,
 		version:   version,
+		collector: NewCollector(),
 	}
 }
 
@@ -36,6 +37,7 @@ type Planner struct {
 	proc      *resource.Preprocessor
 	envName   string
 	version   string
+	collector *Collector
 }
 
 func (r *Planner) Plan() ([]PlanAction, error) {
@@ -87,7 +89,6 @@ func (r *Planner) appendPipelineMutations(plan *[]PlanAction) error {
 		}
 
 		*plan = append(*plan, &putPipeline{
-			es:         r.es,
 			id:         pipelineId,
 			definition: newPipelineDef,
 		})
@@ -149,7 +150,6 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
-				es:         r.es,
 				name:       indexName,
 				indexSet:   is.IndexSet,
 				definition: newIndexDef,
@@ -160,7 +160,6 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 			if !staticIndex {
 				if e := r.config.Prototype.Environment; e != "" && e != r.envName && !is.Meta.Prototype.Disabled {
 					*plan = append(*plan, &reindex{
-						es:       r.es,
 						from:     newAliasName(is.IndexSet, e),
 						to:       indexName,
 						maxDocs:  is.Meta.Prototype.MaxDocs,
@@ -170,14 +169,12 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 			}
 
 			*plan = append(*plan, &createAlias{
-				es:    r.es,
 				name:  aliasName,
 				index: indexName,
 			})
 		} else {
 			if !staticIndex {
 				*plan = append(*plan, &reindex{
-					es:       r.es,
 					from:     aliasName,
 					to:       indexName,
 					maxDocs:  -1,
@@ -187,7 +184,6 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 
 			if !staticIndex || !reflect.DeepEqual([]string{indexName}, existingIndices) {
 				*plan = append(*plan, &updateAlias{
-					es:         r.es,
 					name:       aliasName,
 					newIndex:   indexName,
 					oldIndices: existingIndices,
@@ -196,7 +192,6 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 		}
 
 		*plan = append(*plan, &writeChangelogEntry{
-			changelog:          r.changelog,
 			resourceType:       "index_set",
 			resourceIdentifier: is.ResourceIdentifier(),
 			finalName:          indexName,
@@ -238,14 +233,12 @@ func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 		index := newAliasName(doc.IndexSet, r.envName)
 
 		*plan = append(*plan, &indexDocument{
-			es:       r.es,
 			id:       doc.Name,
 			index:    index,
 			document: final,
 		})
 
 		*plan = append(*plan, &writeChangelogEntry{
-			changelog:          r.changelog,
 			resourceType:       "document",
 			resourceIdentifier: doc.ResourceIdentifier(),
 			finalName:          doc.Name,
@@ -320,6 +313,18 @@ func planChangesPipeline(plan []PlanAction, pipeline string, envName string) boo
 }
 
 type PlanAction interface {
-	Execute() error
+	Execute(es *es.Client, changelog *resource.Changelog, collector *Collector) error
 	String() string
+}
+
+type Collector struct {
+	Indices   []string
+	Pipelines []string
+}
+
+func NewCollector() *Collector {
+	return &Collector{
+		Indices:   []string{},
+		Pipelines: []string{},
+	}
 }

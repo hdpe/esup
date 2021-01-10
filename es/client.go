@@ -212,6 +212,20 @@ func (r *Client) Reindex(fromIndex string, toIndex string, maxDocs int, pipeline
 	return task.String(), nil
 }
 
+func (r *Client) DeleteIndex(id string) error {
+	res, err := r.client.Indices.Delete([]string{id})
+
+	if err != nil {
+		return err
+	}
+
+	if err = verifyResponse(res); err != nil {
+		return fmt.Errorf("couldn't delete index %v: %w", id, err)
+	}
+
+	return nil
+}
+
 func (r *Client) CreateAlias(aliasName string, indexName string) error {
 	res, err := r.client.Indices.PutAlias([]string{indexName}, aliasName)
 
@@ -305,6 +319,20 @@ func (r *Client) PutPipelineDef(id string, definition string) error {
 
 	if err = verifyResponse(res); err != nil {
 		return fmt.Errorf("couldn't put pipeline definition: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Client) DeletePipeline(id string) error {
+	res, err := r.client.Ingest.DeletePipeline(id)
+
+	if err != nil {
+		return err
+	}
+
+	if err = verifyResponse(res); err != nil {
+		return fmt.Errorf("couldn't delete pipeline %v: %w", id, err)
 	}
 
 	return nil

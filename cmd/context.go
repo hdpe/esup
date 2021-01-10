@@ -2,20 +2,13 @@ package cmd
 
 import (
 	"github.com/hdpe.me/esup/config"
+	"github.com/hdpe.me/esup/context"
 	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
 )
 
-type cmdContext struct {
-	conf      config.Config
-	schema    schema.Schema
-	es        *es.Client
-	changelog *resource.Changelog
-	proc      *resource.Preprocessor
-}
-
-func newContext(envName string) *cmdContext {
+func newContext(envName string) *context.Context {
 	conf, err := config.NewConfig()
 
 	if err != nil {
@@ -37,11 +30,11 @@ func newContext(envName string) *cmdContext {
 	changelog := resource.NewChangelog(conf.Changelog, esClient)
 	proc := resource.NewPreprocessor(conf.Preprocess)
 
-	return &cmdContext{
-		conf:      conf,
-		schema:    resSchema,
-		es:        esClient,
-		changelog: changelog,
-		proc:      proc,
+	return &context.Context{
+		Conf:      conf,
+		Schema:    resSchema,
+		Es:        esClient,
+		Changelog: changelog,
+		Proc:      proc,
 	}
 }

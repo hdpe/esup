@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hdpe.me/esup/config"
+	esupContext "github.com/hdpe.me/esup/context"
 	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
@@ -43,8 +44,7 @@ func TestPlanner_Plan(t *testing.T) {
 			s, err := tc.Schema()
 
 			if err != nil {
-				t.Error(err)
-				return
+				t.Fatal(err)
 			}
 
 			defer func() {
@@ -53,16 +53,36 @@ func TestPlanner_Plan(t *testing.T) {
 				}
 			}()
 
-			plan, err := GetPlan(c, s, tc.Clock())
+			ctx, err := GetContext(c, s)
 
 			if err != nil {
-				t.Errorf("%w", err)
-				return
+				t.Fatalf("%v", err)
+			}
+
+			if tc.Setup() != nil {
+				coll := NewCollector()
+				defer CleanUp(ctx, coll)
+
+				tc.Setup()(Setup{
+					es:        ctx.Es,
+					changelog: ctx.Changelog,
+					onError: func(err error) {
+						t.Fatalf("error in test setup: %v", err)
+					},
+					collector: coll,
+				})
+			}
+
+			p := NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, s, ctx.Proc, tc.Clock())
+
+			plan, err := p.Plan()
+
+			if err != nil {
+				t.Fatalf("%v", err)
 			}
 
 			if got, want := len(plan), len(tc.expected); got != want {
-				t.Errorf("got %v action(s), want %v", got, want)
-				return
+				t.Fatalf("got %v action(s), want %v", got, want)
 			}
 
 			for i, _ := range plan {
@@ -74,7 +94,23 @@ func TestPlanner_Plan(t *testing.T) {
 	}
 }
 
-func GetPlan(c *ElasticsearchContainer, s schema.Schema, clock util.Clock) ([]PlanAction, error) {
+func CleanUp(ctx *esupContext.Context, coll *Collector) {
+	logOnError := func(f func() error) {
+		if err := f(); err != nil {
+			print(fmt.Errorf("%w", err))
+		}
+	}
+
+	for _, p := range coll.Pipelines {
+		logOnError(func() error { return ctx.Es.DeletePipeline(p) })
+	}
+	for _, i := range coll.Indices {
+		logOnError(func() error { return ctx.Es.DeleteIndex(i) })
+	}
+	logOnError(func() error { return ctx.Es.DeleteIndex(ctx.Conf.Changelog.Index) })
+}
+
+func GetContext(c *ElasticsearchContainer, s schema.Schema) (*esupContext.Context, error) {
 	baseUrl, err := c.BaseUrl()
 
 	if err != nil {
@@ -99,9 +135,13 @@ func GetPlan(c *ElasticsearchContainer, s schema.Schema, clock util.Clock) ([]Pl
 	changelog := resource.NewChangelog(conf.Changelog, client)
 	proc := resource.NewPreprocessor(conf.Preprocess)
 
-	p := NewPlanner(client, conf, changelog, s, proc, clock)
-
-	return p.Plan()
+	return &esupContext.Context{
+		Conf:      conf,
+		Schema:    s,
+		Es:        client,
+		Changelog: changelog,
+		Proc:      proc,
+	}, nil
 }
 
 type ElasticsearchContainer struct {
@@ -154,10 +194,11 @@ func NewElasticsearchContainer() (*ElasticsearchContainer, error) {
 	}, err
 }
 
-type planTestCase interface {
+type PlanTestCase interface {
 	desc() string
 	envName() string
 	schema() schema.Schema
 	clock() util.Clock
+	setup() func(setup Setup)
 	expected() []testutil.Matcher
 }

@@ -33,14 +33,14 @@ var migrateCmd = &cobra.Command{
 
 		ctx := newContext(envName)
 
-		planner := plan.NewPlanner(ctx.es, ctx.conf, ctx.changelog, ctx.schema, ctx.proc, &util.DefaultClock{})
+		planner := plan.NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, ctx.Schema, ctx.Proc, &util.DefaultClock{})
 		resPlan, err := planner.Plan()
 
 		if err != nil {
 			fatalError("couldn't plan update: %v", err)
 		}
 
-		logPlan(resPlan, ctx.conf.Server)
+		logPlan(resPlan, ctx.Conf.Server)
 
 		if len(resPlan) == 0 {
 			os.Exit(0)
@@ -57,8 +57,10 @@ var migrateCmd = &cobra.Command{
 			}
 		}
 
+		coll := plan.NewCollector()
+
 		for _, item := range resPlan {
-			if err = item.Execute(); err != nil {
+			if err = item.Execute(ctx.Es, ctx.Changelog, coll); err != nil {
 				fatalError("couldn't execute %v: %v", item, err)
 			}
 		}
