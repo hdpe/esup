@@ -49,71 +49,34 @@ type Client struct {
 	client *elasticsearch.Client
 }
 
-func (r *Client) GetChangelogEntry(indexName string, resourceType string, resourceIdentifier string,
-	envName string) (ChangelogEntry, error) {
-
-	body := map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": []map[string]interface{}{
-					{
-						"term": map[string]interface{}{
-							"resource_type": resourceType,
-						},
-					},
-					{
-						"term": map[string]interface{}{
-							"resource_identifier": resourceIdentifier,
-						},
-					},
-					{
-						"term": map[string]interface{}{
-							"env_name": envName,
-						},
-					},
-				},
-			},
-		},
-		"sort": map[string]interface{}{
-			"timestamp": map[string]interface{}{
-				"order": "desc",
-			},
-		},
-	}
-
+func (r *Client) Search(indexName string, body map[string]interface{}, o ...func(*esapi.SearchRequest)) ([]gjson.Result, error) {
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
-		return ChangelogEntry{}, fmt.Errorf("couldn't encode JSON request: %w", err)
+		return []gjson.Result{}, fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
-	res, err := r.client.Search(func(req *esapi.SearchRequest) {
+	o0 := func(req *esapi.SearchRequest) {
 		req.Index = []string{indexName}
 		req.Body = &buf
-		req.Size = util.Intptr(1)
-	})
+	}
+
+	req := []func(r *esapi.SearchRequest){o0}
+	req = append(req, o...)
+
+	res, err := r.client.Search(req...)
 
 	if err != nil {
-		return ChangelogEntry{}, err
+		return []gjson.Result{}, err
 	}
 
 	responseBody, err := getBodyAndVerifyResponse(res)
 
 	if err != nil {
-		return ChangelogEntry{}, fmt.Errorf("couldn't get changelog entry: %w", err)
+		return []gjson.Result{}, fmt.Errorf("couldn't get changelog entry: %w", err)
 	}
 
-	_source := gjson.Get(responseBody, "hits.hits.0._source")
-
-	if !_source.Exists() {
-		return ChangelogEntry{}, nil
-	}
-
-	return ChangelogEntry{
-		IsPresent: true,
-		Content:   _source.Get("content").String(),
-		Meta:      _source.Get("meta").String(),
-	}, nil
+	return gjson.Get(responseBody, "hits.hits.#._source").Array(), nil
 }
 
 func (r *Client) IndexDocument(indexName string, id string, body map[string]interface{}) error {

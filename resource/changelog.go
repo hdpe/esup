@@ -60,7 +60,7 @@ func (r *Changelog) GetCurrentChangelogEntry(resourceType string, resourceIdenti
 		}
 	}
 
-	return r.es.GetChangelogEntry(r.config.Index, resourceType, resourceIdentifier, envName)
+	return es.GetChangelogEntry(r.es, r.config.Index, resourceType, resourceIdentifier, envName)
 }
 
 func (r *Changelog) PutChangelogEntry(resourceType string, resourceIdentifier string, finalName string,
