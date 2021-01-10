@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hdpe.me/esup/config"
 	"github.com/hdpe.me/esup/plan"
+	"github.com/hdpe.me/esup/util"
 	"github.com/spf13/cobra"
 	"os"
 	"regexp"
@@ -32,7 +33,7 @@ var migrateCmd = &cobra.Command{
 
 		ctx := newContext(envName)
 
-		planner := plan.NewPlanner(ctx.es, ctx.conf, ctx.changelog, ctx.schema, ctx.proc)
+		planner := plan.NewPlanner(ctx.es, ctx.conf, ctx.changelog, ctx.schema, ctx.proc, &util.DefaultClock{})
 		resPlan, err := planner.Plan()
 
 		if err != nil {

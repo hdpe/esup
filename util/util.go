@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"encoding/base64"
+	"time"
 )
 
 func Boolptr(b bool) *bool {
@@ -34,4 +35,15 @@ func Base64enc(str string) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+type Clock interface {
+	Now() time.Time
+}
+
+type DefaultClock struct {
+}
+
+func (c *DefaultClock) Now() time.Time {
+	return time.Now()
 }

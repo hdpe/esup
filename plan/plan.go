@@ -8,14 +8,14 @@ import (
 	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
+	"github.com/hdpe.me/esup/util"
 	"reflect"
-	"time"
 )
 
 func NewPlanner(es *es.Client, config config.Config, changelog *resource.Changelog, s schema.Schema,
-	proc *resource.Preprocessor) *Planner {
+	proc *resource.Preprocessor, clock util.Clock) *Planner {
 
-	version := time.Now().UTC().Format("20060102150405")
+	version := clock.Now().UTC().Format("20060102150405")
 
 	return &Planner{
 		es:        es,
