@@ -195,10 +195,11 @@ func NewElasticsearchContainer() (*ElasticsearchContainer, error) {
 }
 
 type PlanTestCase interface {
-	desc() string
-	envName() string
-	schema() schema.Schema
-	clock() util.Clock
-	setup() func(setup Setup)
-	expected() []testutil.Matcher
+	Desc() string
+	EnvName() string
+	Clock() util.Clock
+	Schema() (schema.Schema, error)
+	Setup() func(setup Setup)
+	Expected() []testutil.Matcher
+	Clean() error
 }
