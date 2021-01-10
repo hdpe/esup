@@ -14,49 +14,15 @@ import (
 	"github.com/tidwall/gjson"
 	"io"
 	"io/ioutil"
-	"os"
 	"testing"
 )
 
 func TestPlanner_Plan(t *testing.T) {
-	clock := testutil.NewStaticClock("2001-02-03T04:05:06Z")
-
-	testCases := []struct {
-		desc     string
-		envName  string
-		indexSet IndexSetSpec
-		expected []testutil.Matcher
-	}{
-		{
-			desc:    "create fresh index set",
-			envName: "env",
-			indexSet: IndexSetSpec{
-				Name:    "x",
-				Content: "{}",
-				Meta:    schema.IndexSetMeta{},
-			},
-			expected: []testutil.Matcher{
-				newCreateIndexMatcher().
-					withName("env-x_20010203040506").
-					withIndexSet("x").
-					withDefinition("{}"),
-				newCreateAliasMatcher().
-					withName("env-x").
-					withIndex("env-x_20010203040506"),
-				newWriteChangelogEntryMatcher().
-					withResourceType("index_set").
-					withResourceIdentifier("x").
-					withFinalName("env-x_20010203040506").
-					withEnvName("env").
-					withDefinition("{}").
-					withMeta("{\"Index\":\"\",\"Prototype\":{\"Disabled\":false,\"MaxDocs\":0},\"Reindex\":{\"Pipeline\":\"\"}}"),
-			},
-		},
-	}
-
 	if testing.Short() {
 		t.Skip()
 	}
+
+	testCases := indexSetTestCases
 
 	c, err := NewElasticsearchContainer()
 
@@ -74,7 +40,7 @@ func TestPlanner_Plan(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			is, err := tc.indexSet.ToSchemaObject()
+			s, err := tc.Schema()
 
 			if err != nil {
 				t.Error(err)
@@ -82,17 +48,12 @@ func TestPlanner_Plan(t *testing.T) {
 			}
 
 			defer func() {
-				if err := tc.indexSet.Clean(); err != nil {
+				if err := tc.Clean(); err != nil {
 					println(err)
 				}
 			}()
 
-			s := schema.Schema{
-				EnvName:   tc.envName,
-				IndexSets: []schema.IndexSet{is},
-			}
-
-			plan, err := GetPlan(c, s, clock)
+			plan, err := GetPlan(c, s, tc.Clock())
 
 			if err != nil {
 				t.Errorf("%w", err)
@@ -105,7 +66,7 @@ func TestPlanner_Plan(t *testing.T) {
 			}
 
 			for i, _ := range plan {
-				if match := tc.expected[i].Match(plan[i]); !match.Matched {
+				if match := tc.Expected()[i].Match(plan[i]); !match.Matched {
 					t.Errorf("%v", match.Failures)
 				}
 			}
@@ -193,30 +154,10 @@ func NewElasticsearchContainer() (*ElasticsearchContainer, error) {
 	}, err
 }
 
-type IndexSetSpec struct {
-	Name     string
-	Content  string
-	Meta     schema.IndexSetMeta
-	FilePath string
-}
-
-func (s *IndexSetSpec) ToSchemaObject() (schema.IndexSet, error) {
-	file, err := ioutil.TempFile("", "*")
-
-	if err != nil {
-		return schema.IndexSet{}, err
-	}
-
-	s.FilePath = file.Name()
-	err = ioutil.WriteFile(s.FilePath, []byte(s.Content), 0600)
-
-	return schema.IndexSet{
-		IndexSet: s.Name,
-		FilePath: s.FilePath,
-		Meta:     s.Meta,
-	}, err
-}
-
-func (s *IndexSetSpec) Clean() error {
-	return os.Remove(s.FilePath)
+type planTestCase interface {
+	desc() string
+	envName() string
+	schema() schema.Schema
+	clock() util.Clock
+	expected() []testutil.Matcher
 }
