@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/hdpe.me/esup/context"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -23,4 +24,16 @@ func Execute() {
 func fatalError(format string, a ...interface{}) {
 	println(fmt.Sprintf(format, a...))
 	os.Exit(1)
+}
+
+func getLock(ctx *context.Context, envName string) {
+	if err := ctx.Lock.Get(envName); err != nil {
+		fatalError("couldn't get lock: %v", err)
+	}
+}
+
+func releaseLock(ctx *context.Context, envName string) {
+	if err := ctx.Lock.Release(envName); err != nil {
+		fatalError("couldn't release lock: %v", err)
+	}
 }

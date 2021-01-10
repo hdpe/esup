@@ -10,6 +10,7 @@ func NewConfig() (Config, error) {
 	viper := viperlib.New()
 	viper.SetDefault("server.address", "http://localhost:9200")
 	viper.SetDefault("changelog.index", "esup-changelog0")
+	viper.SetDefault("changelog.lockIndex", "esup-lock0")
 	viper.SetDefault("pipelines.directory", "./pipelines")
 	viper.SetDefault("indexSets.directory", "./indexSets")
 	viper.SetDefault("documents.directory", "./documents")
@@ -35,7 +36,10 @@ func NewConfig() (Config, error) {
 			ApiKey:  viper.GetString("server.apiKey"),
 		},
 		PrototypeConfig{Environment: viper.GetString("prototype.environment")},
-		ChangelogConfig{Index: viper.GetString("changelog.index")},
+		ChangelogConfig{
+			Index:     viper.GetString("changelog.index"),
+			LockIndex: viper.GetString("changelog.lockIndex"),
+		},
 		IndexSetsConfig{Directory: viper.GetString("indexSets.directory")},
 		PipelinesConfig{Directory: viper.GetString("pipelines.directory")},
 		DocumentsConfig{Directory: viper.GetString("documents.directory")},
@@ -63,7 +67,8 @@ type PrototypeConfig struct {
 }
 
 type ChangelogConfig struct {
-	Index string
+	Index     string
+	LockIndex string
 }
 
 type IndexSetsConfig struct {

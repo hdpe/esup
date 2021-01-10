@@ -28,6 +28,7 @@ func newContext(envName string) *context.Context {
 	}
 
 	changelog := resource.NewChangelog(conf.Changelog, esClient)
+	lock := resource.NewLock(conf.Changelog, esClient)
 	proc := resource.NewPreprocessor(conf.Preprocess)
 
 	return &context.Context{
@@ -35,6 +36,7 @@ func newContext(envName string) *context.Context {
 		Schema:    resSchema,
 		Es:        esClient,
 		Changelog: changelog,
+		Lock:      lock,
 		Proc:      proc,
 	}
 }

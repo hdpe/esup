@@ -28,23 +28,23 @@ var migrateCmd = &cobra.Command{
 		}
 		return validateEnv(args[0])
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		envName := args[0]
 
 		ctx := newContext(envName)
 
 		planner := plan.NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, ctx.Schema, ctx.Proc, &util.DefaultClock{})
+
+		getLock(ctx, envName)
+		defer releaseLock(ctx, envName)
+
 		resPlan, err := planner.Plan()
 
 		if err != nil {
-			fatalError("couldn't plan update: %v", err)
+			return fmt.Errorf("couldn't plan update: %w", err)
 		}
 
 		logPlan(resPlan, ctx.Conf.Server)
-
-		if len(resPlan) == 0 {
-			os.Exit(0)
-		}
 
 		if !approve {
 			reader := bufio.NewReader(os.Stdin)
@@ -53,7 +53,7 @@ var migrateCmd = &cobra.Command{
 
 			if strings.ToLower(text) != "y\n" {
 				println("Cancelled")
-				os.Exit(0)
+				return nil
 			}
 		}
 
@@ -61,11 +61,12 @@ var migrateCmd = &cobra.Command{
 
 		for _, item := range resPlan {
 			if err = item.Execute(ctx.Es, ctx.Changelog, coll); err != nil {
-				fatalError("couldn't execute %v: %v", item, err)
+				return fmt.Errorf("couldn't execute %v: %v", item, err)
 			}
 		}
 
 		println("Complete")
+		return nil
 	},
 }
 

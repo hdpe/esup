@@ -22,7 +22,7 @@ var importCmd = &cobra.Command{
 		}
 		return validateEnv(args[2])
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		resourceType := args[0]
 		resourceIdentifier := args[1]
 		envName := args[2]
@@ -31,11 +31,16 @@ var importCmd = &cobra.Command{
 
 		i := imp.NewImporter(ctx.Changelog, ctx.Schema, ctx.Proc)
 
+		getLock(ctx, envName)
+		defer releaseLock(ctx, envName)
+
 		err := i.ImportResource(resourceType, resourceIdentifier)
 
 		if err != nil {
-			fatalError("couldn't import resource: %v", err)
+			return fmt.Errorf("couldn't import resource: %v", err)
 		}
+
+		return nil
 	},
 }
 

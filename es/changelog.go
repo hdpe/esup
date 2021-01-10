@@ -4,12 +4,43 @@ import (
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/hdpe.me/esup/util"
+	"time"
 )
 
 type ChangelogEntry struct {
 	IsPresent bool
 	Content   string
 	Meta      string
+}
+
+func CreateChangelogIndex(es *Client, indexName string) error {
+	return es.CreateIndex(indexName, `{
+	"mappings": {
+		"properties": {
+			"resource_type": {
+				"type": "keyword"
+			},
+			"resource_identifier": {
+				"type": "keyword"
+			},
+			"final_name": {
+				"type": "keyword"
+			},
+			"env_name": {
+				"type": "keyword"
+			},
+			"content": {
+				"type": "text"
+			},
+			"meta": {
+				"type": "text"
+			},
+			"timestamp": {
+				"type": "date"
+			}
+		}
+	}
+}`)
 }
 
 func GetChangelogEntry(es *Client, indexName string, resourceType string, resourceIdentifier string,
@@ -56,11 +87,31 @@ func GetChangelogEntry(es *Client, indexName string, resourceType string, resour
 		return ChangelogEntry{}, nil
 	}
 
-	_source := res[0]
+	source := res[0].source
 
 	return ChangelogEntry{
 		IsPresent: true,
-		Content:   _source.Get("content").String(),
-		Meta:      _source.Get("meta").String(),
+		Content:   source.Get("content").String(),
+		Meta:      source.Get("meta").String(),
 	}, nil
+}
+
+func PutChangelogEntry(es *Client, indexName string, resourceType string, resourceIdentifier string, finalName string,
+	entry ChangelogEntry, envName string) error {
+
+	body := map[string]interface{}{
+		"resource_type":       resourceType,
+		"resource_identifier": resourceIdentifier,
+		"final_name":          finalName,
+		"content":             entry.Content,
+		"meta":                entry.Meta,
+		"env_name":            envName,
+		"timestamp":           time.Now().UTC().Format(systemTimestampLayout),
+	}
+
+	if err := es.IndexDocument(indexName, "", body); err != nil {
+		return fmt.Errorf("couldn't put changelog entry %v %v: %w", resourceType, resourceIdentifier, err)
+	}
+
+	return nil
 }

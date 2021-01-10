@@ -49,11 +49,11 @@ type Client struct {
 	client *elasticsearch.Client
 }
 
-func (r *Client) Search(indexName string, body map[string]interface{}, o ...func(*esapi.SearchRequest)) ([]gjson.Result, error) {
+func (r *Client) Search(indexName string, body map[string]interface{}, o ...func(*esapi.SearchRequest)) ([]Document, error) {
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
-		return []gjson.Result{}, fmt.Errorf("couldn't encode JSON request: %w", err)
+		return []Document{}, fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
 	o0 := func(req *esapi.SearchRequest) {
@@ -67,30 +67,40 @@ func (r *Client) Search(indexName string, body map[string]interface{}, o ...func
 	res, err := r.client.Search(req...)
 
 	if err != nil {
-		return []gjson.Result{}, err
+		return []Document{}, err
 	}
 
 	responseBody, err := getBodyAndVerifyResponse(res)
 
 	if err != nil {
-		return []gjson.Result{}, fmt.Errorf("couldn't get changelog entry: %w", err)
+		return []Document{}, fmt.Errorf("couldn't search index %v: %w", indexName, err)
 	}
 
-	return gjson.Get(responseBody, "hits.hits.#._source").Array(), nil
+	docs := make([]Document, 0)
+	for _, doc := range gjson.Get(responseBody, "hits.hits").Array() {
+		docs = append(docs, newDocument(doc))
+	}
+
+	return docs, nil
 }
 
-func (r *Client) IndexDocument(indexName string, id string, body map[string]interface{}) error {
+func (r *Client) IndexDocument(indexName string, id string, body map[string]interface{}, o ...func(*esapi.IndexRequest)) error {
 	var buf bytes.Buffer
 
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		return fmt.Errorf("couldn't encode JSON request: %w", err)
 	}
 
-	res, err := r.client.Index(indexName, &buf, func(request *esapi.IndexRequest) {
+	o0 := func(request *esapi.IndexRequest) {
 		if id != "" {
 			request.DocumentID = id
 		}
-	})
+	}
+
+	req := []func(r *esapi.IndexRequest){o0}
+	req = append(req, o...)
+
+	res, err := r.client.Index(indexName, &buf, req...)
 
 	if err != nil {
 		return err
@@ -101,6 +111,26 @@ func (r *Client) IndexDocument(indexName string, id string, body map[string]inte
 	}
 
 	return nil
+}
+
+func (r *Client) GetDocument(indexName string, id string) (Document, error) {
+	res, err := r.client.Get(indexName, id)
+
+	if err != nil {
+		return Document{}, fmt.Errorf("couldn't get document: %w", err)
+	}
+
+	body, err := getBodyOrEmptyAndVerifyResponse(res)
+
+	if err != nil {
+		return Document{}, fmt.Errorf("couldn't get document: %w", err)
+	}
+
+	if body == "" {
+		return Document{}, nil
+	}
+
+	return newDocument(gjson.Parse(body)), nil
 }
 
 func (r *Client) GetIndicesForAlias(alias string) ([]string, error) {

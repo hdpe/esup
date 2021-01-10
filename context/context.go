@@ -12,5 +12,6 @@ type Context struct {
 	Schema    schema.Schema
 	Es        *es.Client
 	Changelog *resource.Changelog
+	Lock      *resource.Lock
 	Proc      *resource.Preprocessor
 }
