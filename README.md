@@ -247,6 +247,11 @@ All properties overridable via environment variable.
 server:
   address: ...
   apiKey: ...
+prototype:
+  environment: ...
+changelog:
+  index: ...
+  lockIndex: ...
 indexSets:
   directory: ...
 pipelines:
@@ -262,6 +267,8 @@ preprocess:
 |server.address|SERVER_ADDRESS|string|address of Elasticsearch server|`"http://localhost:9200"`|
 |server.apiKey|SERVER_APIKEY|string|api key for server access||
 |prototype.environment|PROTOTYPE_ENVIRONMENT|string|reindex all new index sets from corresponding index in this environment||
+|changelog.index|CHANGELOG_INDEX|string|index storing the esup changelog|`"esup-changelog0"`|
+|changelog.lockIndex|CHANGELOG_LOCKINDEX|string|index storing the esup changelog lock|`"esup-lock0"`|
 |indexSets.directory|INDEXSETS_DIRECTORY|string|directory containing index set resources|`"./indexSets"`|
 |pipelines.directory|PIPELINES_DIRECTORY|string|directory containing pipeline resources|`"./pipelines"`|
 |documents.directory|DOCUMENTS_DIRECTORY|string|directory containing document resources|`"./documents"`|
