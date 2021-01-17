@@ -3,6 +3,8 @@ package util
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -46,4 +48,17 @@ type DefaultClock struct {
 
 func (c *DefaultClock) Now() time.Time {
 	return time.Now()
+}
+
+func AnyErrors(err ...error) error {
+	var msgs []string
+	for _, e := range err {
+		if e != nil {
+			msgs = append(msgs, fmt.Sprintf("%v", e))
+		}
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%v", strings.Join(msgs, "; "))
 }

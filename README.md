@@ -177,7 +177,15 @@ Request body of Elasticsearch [Index API](https://www.elastic.co/guide/en/elasti
 
 #### Meta
 
-No meta parameters supported.
+`{indexSetName}-{name}-{environment}.meta.yml`
+
+```yaml
+ignored: ...
+```
+
+|Key|Type|Description|Default|
+|---|---|---|---|
+|ignored|boolean|skip indexing of this document|`false`|
 
 ## Includes
 

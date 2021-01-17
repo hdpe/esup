@@ -8,8 +8,8 @@ import (
 	"os"
 )
 
-var indexSetTestCases = []indexSetTestCase{
-	{
+var indexSetTestCases = []PlanTestCase{
+	&indexSetTestCase{
 		desc:    "create fresh index set",
 		envName: "env",
 		indexSet: IndexSetSpec{
@@ -35,7 +35,7 @@ var indexSetTestCases = []indexSetTestCase{
 				withMeta("{\"Index\":\"\",\"Prototype\":{\"Disabled\":false,\"MaxDocs\":0},\"Reindex\":{\"Pipeline\":\"\"}}"),
 		},
 	},
-	{
+	&indexSetTestCase{
 		desc:    "update existing index set",
 		envName: "env",
 		indexSet: IndexSetSpec{
@@ -147,8 +147,7 @@ func (r *indexSetTestCase) Clean() error {
 }
 
 type IndexSetSpec struct {
-	Name     string
-	Content  string
-	Meta     schema.IndexSetMeta
-	FilePath string
+	Name    string
+	Content string
+	Meta    schema.IndexSetMeta
 }

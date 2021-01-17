@@ -8,8 +8,6 @@ import (
 	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
-	"github.com/hdpe.me/esup/testutil"
-	"github.com/hdpe.me/esup/util"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/tidwall/gjson"
@@ -23,7 +21,13 @@ func TestPlanner_Plan(t *testing.T) {
 		t.Skip()
 	}
 
-	testCases := indexSetTestCases
+	var testCases []PlanTestCase
+	for _, tc := range indexSetTestCases {
+		testCases = append(testCases, tc)
+	}
+	for _, tc := range documentTestCases {
+		testCases = append(testCases, tc)
+	}
 
 	c, err := NewElasticsearchContainer()
 
@@ -40,7 +44,7 @@ func TestPlanner_Plan(t *testing.T) {
 
 	for _, tc := range testCases {
 		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
+		t.Run(tc.Desc(), func(t *testing.T) {
 			s, err := tc.Schema()
 
 			if err != nil {
@@ -81,7 +85,7 @@ func TestPlanner_Plan(t *testing.T) {
 				t.Fatalf("%v", err)
 			}
 
-			if got, want := len(plan), len(tc.expected); got != want {
+			if got, want := len(plan), len(tc.Expected()); got != want {
 				t.Fatalf("got %v action(s), want %v", got, want)
 			}
 
@@ -192,14 +196,4 @@ func NewElasticsearchContainer() (*ElasticsearchContainer, error) {
 		c:   c,
 		ctx: ctx,
 	}, err
-}
-
-type PlanTestCase interface {
-	Desc() string
-	EnvName() string
-	Clock() util.Clock
-	Schema() (schema.Schema, error)
-	Setup() func(setup Setup)
-	Expected() []testutil.Matcher
-	Clean() error
 }

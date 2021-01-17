@@ -38,3 +38,8 @@ func (r *Changelog) PutChangelogEntry(resourceType string, resourceIdentifier st
 
 	return es.PutChangelogEntry(r.es, r.config.Index, resourceType, resourceIdentifier, finalName, entry, envName)
 }
+
+// Refresh forces a refresh of the changelog index which is useful for tests
+func (r *Changelog) Refresh() error {
+	return r.es.Refresh(r.config.Index)
+}

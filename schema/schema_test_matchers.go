@@ -32,7 +32,7 @@ func (m *indexSetMatcher) withMeta(meta *indexSetMetaMatcher) *indexSetMatcher {
 }
 
 func (m *indexSetMatcher) withDefaultMeta() *indexSetMatcher {
-	m.meta = newIndexSetMetaMatcherLike(defaultMeta())
+	m.meta = newIndexSetMetaMatcherLike(DefaultIndexSetMeta())
 	return m
 }
 
@@ -142,6 +142,7 @@ type documentMatcher struct {
 	indexSet     *string
 	name         *string
 	filePathFile *string
+	meta         *documentMetaMatcher
 }
 
 func (m *documentMatcher) withIndexSet(indexSet string) *documentMatcher {
@@ -156,6 +157,11 @@ func (m *documentMatcher) withName(name string) *documentMatcher {
 
 func (m *documentMatcher) withFilePathFile(file string) *documentMatcher {
 	m.filePathFile = &file
+	return m
+}
+
+func (m *documentMatcher) withMeta(meta *documentMetaMatcher) *documentMatcher {
+	m.meta = meta
 	return m
 }
 
@@ -186,6 +192,51 @@ func (m *documentMatcher) Match(actual interface{}) testutil.MatchResult {
 
 		if got, want := gotPathComponents[len(gotPathComponents)-1], *(m.filePathFile); got != want {
 			r.Reject(fmt.Sprintf("got filePath file %q, want %q", got, want))
+		}
+	}
+
+	if m.meta != nil {
+		if metaMatch := m.meta.Match(doc.Meta); !metaMatch.Matched {
+			for _, f := range metaMatch.Failures {
+				r.Reject(fmt.Sprintf("%v in meta", f))
+			}
+		}
+	}
+
+	return r
+}
+
+func newDocumentMetaMatcher() *documentMetaMatcher {
+	return &documentMetaMatcher{}
+}
+
+func newDocumentMetaMatcherLike(meta DocumentMeta) *documentMetaMatcher {
+	return newDocumentMetaMatcher().
+		withIgnored(meta.Ignored)
+}
+
+type documentMetaMatcher struct {
+	ignored *bool
+}
+
+func (m *documentMetaMatcher) withIgnored(ignored bool) *documentMetaMatcher {
+	m.ignored = &ignored
+	return m
+}
+
+func (m *documentMetaMatcher) Match(actual interface{}) testutil.MatchResult {
+	r := testutil.NewMatchResult()
+
+	meta, ok := actual.(DocumentMeta)
+
+	if !ok {
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, Document{}))
+		return r
+	}
+
+	if m.ignored != nil {
+		if got, want := meta.Ignored, *(m.ignored); got != want {
+			r.Reject(fmt.Sprintf("got ignored %v, want %v", got, want))
 		}
 	}
 

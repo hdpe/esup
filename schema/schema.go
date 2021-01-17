@@ -54,7 +54,7 @@ func getIndexSets(config config.IndexSetsConfig, envName string) ([]IndexSet, er
 	indexSetMetaByIdentifier := make(map[string]IndexSetMeta)
 
 	for _, r := range metaRes {
-		indexSetMetaByIdentifier[r.identifier], err = readMeta(r.filePath)
+		indexSetMetaByIdentifier[r.identifier], err = readIndexSetMeta(r.filePath)
 
 		if err != nil {
 			return nil, err
@@ -66,7 +66,7 @@ func getIndexSets(config config.IndexSetsConfig, envName string) ([]IndexSet, er
 		meta, ok := indexSetMetaByIdentifier[r.identifier]
 
 		if !ok {
-			meta = defaultMeta()
+			meta = DefaultIndexSetMeta()
 		}
 
 		indexSet := IndexSet{
@@ -97,8 +97,8 @@ func getIndexSets(config config.IndexSetsConfig, envName string) ([]IndexSet, er
 	return indexSets, nil
 }
 
-func readMeta(filePath string) (IndexSetMeta, error) {
-	meta := defaultMeta()
+func readIndexSetMeta(filePath string) (IndexSetMeta, error) {
+	meta := DefaultIndexSetMeta()
 
 	viper := viperlib.New()
 	viper.Set("Verbose", true)
@@ -180,19 +180,54 @@ func getDocuments(config config.DocumentsConfig, envName string) ([]Document, er
 		return nil, err
 	}
 
-	docs := make([]Document, 0)
-	for _, doc := range res {
-		lastDashIdx := strings.LastIndex(doc.identifier, "-")
+	metaRes, err := getEnvironmentResources(config.Directory, envName, "meta.yml")
 
-		if lastDashIdx < 1 || lastDashIdx == len(doc.identifier)-1 {
+	if err != nil {
+		return nil, err
+	}
+
+	documentsByIdentifier := make(map[string]Document)
+	documentMetaByIdentifier := make(map[string]DocumentMeta)
+
+	for _, r := range metaRes {
+		documentMetaByIdentifier[r.identifier], err = readDocumentMeta(r.filePath)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	docs := make([]Document, 0)
+	for _, r := range res {
+		lastDashIdx := strings.LastIndex(r.identifier, "-")
+
+		if lastDashIdx < 1 || lastDashIdx == len(r.identifier)-1 {
 			return docs, errors.New("document filenames should look like {indexSet}-{name}-{environment}.json")
 		}
 
-		docs = append(docs, Document{
-			IndexSet: doc.identifier[:lastDashIdx],
-			Name:     doc.identifier[lastDashIdx+1:],
-			FilePath: doc.filePath,
-		})
+		meta, ok := documentMetaByIdentifier[r.identifier]
+
+		if !ok {
+			meta = DefaultDocumentMeta()
+		}
+
+		doc := Document{
+			IndexSet: r.identifier[:lastDashIdx],
+			Name:     r.identifier[lastDashIdx+1:],
+			FilePath: r.filePath,
+			Meta:     meta,
+		}
+		documentsByIdentifier[r.identifier] = doc
+		docs = append(docs, doc)
+	}
+
+	for id, m := range documentMetaByIdentifier {
+		if _, ok := documentMetaByIdentifier[id]; !ok {
+			docs = append(docs, Document{
+				IndexSet: id,
+				Meta:     m,
+			})
+		}
 	}
 
 	sort.Slice(docs, func(i, j int) bool {
@@ -207,11 +242,45 @@ func getDocuments(config config.DocumentsConfig, envName string) ([]Document, er
 	return docs, nil
 }
 
-func defaultMeta() IndexSetMeta {
+func readDocumentMeta(filePath string) (DocumentMeta, error) {
+	meta := DefaultDocumentMeta()
+
+	viper := viperlib.New()
+	viper.Set("Verbose", true)
+	viper.SetConfigType("yaml")
+
+	in, err := os.Open(filePath)
+
+	if err != nil {
+		return meta, fmt.Errorf("couldn't read %v: %w", filePath, err)
+	}
+
+	defer func() {
+		_ = in.Close()
+	}()
+
+	if err = viper.ReadConfig(in); err != nil {
+		return meta, fmt.Errorf("couldn't read %v: %w", filePath, err)
+	}
+
+	if viper.IsSet("ignored") {
+		meta.Ignored = viper.GetBool("ignored")
+	}
+
+	return meta, nil
+}
+
+func DefaultIndexSetMeta() IndexSetMeta {
 	return IndexSetMeta{
 		Prototype: IndexSetMetaPrototype{
 			Disabled: false,
 			MaxDocs:  -1,
 		},
+	}
+}
+
+func DefaultDocumentMeta() DocumentMeta {
+	return DocumentMeta{
+		Ignored: false,
 	}
 }

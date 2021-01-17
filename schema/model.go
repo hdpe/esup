@@ -48,6 +48,7 @@ type Document struct {
 	IndexSet string
 	Name     string
 	FilePath string
+	Meta     DocumentMeta
 }
 
 func (d Document) ResourceIdentifier() string {
@@ -68,4 +69,8 @@ type IndexSetMetaPrototype struct {
 
 type IndexSetMetaReindex struct {
 	Pipeline string
+}
+
+type DocumentMeta struct {
+	Ignored bool
 }

@@ -220,7 +220,14 @@ func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 			return fmt.Errorf("couldn't get changelog entry for %v: %w", doc.ResourceIdentifier(), err)
 		}
 
-		changed, err := changelogDiff(final, "", changelogEntry)
+		docMeta, err := json.Marshal(doc.Meta)
+
+		if err != nil {
+			return fmt.Errorf("couldn't marshal meta for %v back to json for changelog: %w",
+				doc.ResourceIdentifier(), err)
+		}
+
+		changed, err := changelogDiff(final, string(docMeta), changelogEntry)
 
 		if err != nil {
 			return fmt.Errorf("couldn't diff %v with changelog: %w", doc.ResourceIdentifier(), err)
@@ -232,17 +239,20 @@ func (r *Planner) appendDocumentMutations(plan *[]PlanAction) error {
 
 		index := newAliasName(doc.IndexSet, r.envName)
 
-		*plan = append(*plan, &indexDocument{
-			id:       doc.Name,
-			index:    index,
-			document: final,
-		})
+		if !doc.Meta.Ignored {
+			*plan = append(*plan, &indexDocument{
+				id:       doc.Name,
+				index:    index,
+				document: final,
+			})
+		}
 
 		*plan = append(*plan, &writeChangelogEntry{
 			resourceType:       "document",
 			resourceIdentifier: doc.ResourceIdentifier(),
 			finalName:          doc.Name,
 			definition:         final,
+			meta:               string(docMeta),
 			envName:            r.envName,
 		})
 	}

@@ -384,6 +384,23 @@ func (r *Client) GetTaskStatus(id string) (TaskStatus, error) {
 	return newTaskStatus(body), nil
 }
 
+// Refresh forces a refresh of an index which is useful for refreshing the changelog index during tests
+func (r *Client) Refresh(index string) error {
+	res, err := r.client.Indices.Refresh(func(request *esapi.IndicesRefreshRequest) {
+		request.Index = []string{index}
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err = verifyResponse(res); err != nil {
+		return fmt.Errorf("couldn't refresh index %v: %w", index, err)
+	}
+
+	return nil
+}
+
 func consume(res *esapi.Response) (string, error) {
 	defer func() {
 		_ = res.Body.Close()

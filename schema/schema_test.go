@@ -144,8 +144,31 @@ reindex:
 				"documents/x-y-env1.json": "",
 			},
 			expected: []testutil.Matcher{
-				newIndexSetMatcher().withName("x"),
-				newDocumentMatcher().withIndexSet("x").withName("y").withFilePathFile("x-y-env1.json"),
+				newIndexSetMatcher().
+					withName("x"),
+				newDocumentMatcher().
+					withIndexSet("x").
+					withName("y").
+					withFilePathFile("x-y-env1.json").
+					withMeta(
+						newDocumentMetaMatcherLike(DefaultDocumentMeta()),
+					),
+			},
+		},
+		{
+			desc:    "resolves document with meta",
+			envName: "env1",
+			files: map[string]string{
+				"indexSets/x-env1.json":   "",
+				"documents/x-y-env1.json": "",
+				"documents/x-y-env1.meta.yml": `
+ignored: true`,
+			},
+			expected: []testutil.Matcher{
+				newIndexSetMatcher(),
+				newDocumentMatcher().
+					withMeta(newDocumentMetaMatcher().
+						withIgnored(true)),
 			},
 		},
 		{

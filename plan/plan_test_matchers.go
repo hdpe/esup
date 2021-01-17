@@ -321,3 +321,59 @@ func (m *writeChangelogEntryMatcher) Match(actual interface{}) testutil.MatchRes
 
 	return r
 }
+
+func newIndexDocumentMatcher() *indexDocumentMatcher {
+	return &indexDocumentMatcher{}
+}
+
+type indexDocumentMatcher struct {
+	index    *string
+	id       *string
+	document *string
+}
+
+func (m *indexDocumentMatcher) withIndex(index string) *indexDocumentMatcher {
+	m.index = &index
+	return m
+}
+
+func (m *indexDocumentMatcher) withId(id string) *indexDocumentMatcher {
+	m.id = &id
+	return m
+}
+
+func (m *indexDocumentMatcher) withDocument(document string) *indexDocumentMatcher {
+	m.document = &document
+	return m
+}
+
+func (m *indexDocumentMatcher) Match(actual interface{}) testutil.MatchResult {
+	r := testutil.NewMatchResult()
+
+	a, ok := actual.(*indexDocument)
+
+	if !ok {
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, writeChangelogEntry{}))
+		return r
+	}
+
+	if m.index != nil {
+		if got, want := a.index, *(m.index); got != want {
+			r.Reject(fmt.Sprintf("got index %q, want %q", got, want))
+		}
+	}
+
+	if m.id != nil {
+		if got, want := a.id, *(m.id); got != want {
+			r.Reject(fmt.Sprintf("got id %q, want %q", got, want))
+		}
+	}
+
+	if m.document != nil {
+		if got, want := a.document, *(m.document); got != want {
+			r.Reject(fmt.Sprintf("got document %q, want %q", got, want))
+		}
+	}
+
+	return r
+}

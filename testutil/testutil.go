@@ -1,6 +1,9 @@
 package testutil
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 func ErrorsEqual(e1 error, e2 error) bool {
 	if e1 == nil && e2 == nil {
@@ -46,4 +49,12 @@ type StaticClock struct {
 
 func (c *StaticClock) Now() time.Time {
 	return c.time
+}
+
+func MustMarshalJsonAsString(in interface{}) string {
+	val, err := json.Marshal(in)
+	if err != nil {
+		panic(err)
+	}
+	return string(val)
 }
