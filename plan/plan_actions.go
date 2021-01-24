@@ -149,7 +149,7 @@ func (r *updateAlias) Execute(es *es.Client, _ *resource.Changelog, _ *Collector
 }
 
 func (r *updateAlias) String() string {
-	return fmt.Sprintf("update alias %v -> %v", r.name, r.newIndex)
+	return fmt.Sprintf("update alias %v -> %v, removing %v", r.name, r.newIndex, r.oldIndices)
 }
 
 type putPipeline struct {
