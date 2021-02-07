@@ -77,7 +77,7 @@ func TestPlanner_Plan(t *testing.T) {
 				})
 			}
 
-			p := NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, s, ctx.Proc, tc.Clock())
+			p := NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, s, ctx.Proc, tc.Version())
 
 			plan, err := p.Plan()
 

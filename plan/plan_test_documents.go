@@ -23,7 +23,6 @@ var documentTestCases = []PlanTestCase{
 			Content: `{"k":"v"}`,
 			Meta:    schema.DocumentMeta{Ignored: false},
 		},
-		clock: testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		expected: []testutil.Matcher{
 			newIndexDocumentMatcher().
 				withIndex("env-is").
@@ -51,7 +50,6 @@ var documentTestCases = []PlanTestCase{
 			Content: "{}",
 			Meta:    schema.DocumentMeta{Ignored: true},
 		},
-		clock: testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		expected: []testutil.Matcher{
 			newWriteChangelogEntryMatcher(),
 		},
@@ -63,7 +61,7 @@ type documentTestCase struct {
 	envName  string
 	indexSet IndexSetSpec
 	document DocumentSpec
-	clock    util.Clock
+	version  string
 	setup    func(Setup)
 	expected []testutil.Matcher
 
@@ -80,8 +78,8 @@ func (r *documentTestCase) EnvName() string {
 	return r.envName
 }
 
-func (r *documentTestCase) Clock() util.Clock {
-	return r.clock
+func (r *documentTestCase) Version() string {
+	return r.version
 }
 
 func (r *documentTestCase) Schema() (schema.Schema, error) {

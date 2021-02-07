@@ -13,9 +13,16 @@ import (
 )
 
 var approve bool
+var version string
 
 func init() {
-	migrateCmd.Flags().BoolVarP(&approve, "approve", "a", false, "approve this migration without prompting")
+	migrateCmd.Flags().BoolVarP(&approve, "approve", "a", false,
+		"approve this migration without prompting")
+
+	migrateCmd.Flags().StringVarP(&version, "version", "v",
+		(&util.DefaultClock{}).Now().UTC().Format("20060102150405"),
+		"index version suffix for this migration - defaults to current timestamp")
+
 	rootCmd.AddCommand(migrateCmd)
 }
 
@@ -33,7 +40,7 @@ var migrateCmd = &cobra.Command{
 
 		ctx := newContext(envName)
 
-		planner := plan.NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, ctx.Schema, ctx.Proc, &util.DefaultClock{})
+		planner := plan.NewPlanner(ctx.Es, ctx.Conf, ctx.Changelog, ctx.Schema, ctx.Proc, version)
 
 		getLock(ctx, envName)
 		defer releaseLock(ctx, envName)

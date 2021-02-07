@@ -3,7 +3,6 @@ package plan
 import (
 	"github.com/hdpe.me/esup/schema"
 	"github.com/hdpe.me/esup/testutil"
-	"github.com/hdpe.me/esup/util"
 	"io/ioutil"
 	"os"
 )
@@ -12,7 +11,7 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "create fresh index set",
 		envName: "env",
-		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
+		version: "20010203040506",
 		indexSet: IndexSetSpec{
 			Name:    "x",
 			Content: "{}",
@@ -37,7 +36,7 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "update existing index set",
 		envName: "env",
-		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
+		version: "20010203040506",
 		setup: func(setup Setup) {
 			setup.Apply(
 				&createIndex{
@@ -80,7 +79,6 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "create static index set",
 		envName: "env",
-		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		setup: func(setup Setup) {
 			setup.Apply(
 				&createIndex{
@@ -116,7 +114,6 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "update static index set",
 		envName: "env",
-		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		setup: func(setup Setup) {
 			setup.Apply(
 				&createIndex{
@@ -157,7 +154,7 @@ var indexSetTestCases = []PlanTestCase{
 type indexSetTestCase struct {
 	desc     string
 	envName  string
-	clock    util.Clock
+	version  string
 	setup    func(Setup)
 	indexSet IndexSetSpec
 	expected []testutil.Matcher
@@ -174,8 +171,8 @@ func (r *indexSetTestCase) EnvName() string {
 	return r.envName
 }
 
-func (r *indexSetTestCase) Clock() util.Clock {
-	return r.clock
+func (r *indexSetTestCase) Version() string {
+	return r.version
 }
 
 func (r *indexSetTestCase) Schema() (schema.Schema, error) {

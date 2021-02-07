@@ -5,13 +5,12 @@ import (
 	"github.com/hdpe.me/esup/resource"
 	"github.com/hdpe.me/esup/schema"
 	"github.com/hdpe.me/esup/testutil"
-	"github.com/hdpe.me/esup/util"
 )
 
 type PlanTestCase interface {
 	Desc() string
 	EnvName() string
-	Clock() util.Clock
+	Version() string
 	Schema() (schema.Schema, error)
 	Setup() func(setup Setup)
 	Expected() []testutil.Matcher
