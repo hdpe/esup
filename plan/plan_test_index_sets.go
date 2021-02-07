@@ -12,16 +12,15 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "create fresh index set",
 		envName: "env",
+		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		indexSet: IndexSetSpec{
 			Name:    "x",
 			Content: "{}",
 			Meta:    schema.IndexSetMeta{},
 		},
-		clock: testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		expected: []testutil.Matcher{
 			newCreateIndexMatcher().
 				withName("env-x_20010203040506").
-				withIndexSet("x").
 				withDefinition("{}"),
 			newCreateAliasMatcher().
 				withName("env-x").
@@ -38,17 +37,11 @@ var indexSetTestCases = []PlanTestCase{
 	&indexSetTestCase{
 		desc:    "update existing index set",
 		envName: "env",
-		indexSet: IndexSetSpec{
-			Name:    "x",
-			Content: "{}",
-			Meta:    schema.IndexSetMeta{},
-		},
-		clock: testutil.NewStaticClock("2001-02-03T04:05:06Z"),
+		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
 		setup: func(setup Setup) {
 			setup.Apply(
 				&createIndex{
 					name:       "old",
-					indexSet:   "x",
 					definition: "{}",
 				},
 				&createAlias{
@@ -64,10 +57,14 @@ var indexSetTestCases = []PlanTestCase{
 				},
 			)
 		},
+		indexSet: IndexSetSpec{
+			Name:    "x",
+			Content: "{}",
+			Meta:    schema.IndexSetMeta{},
+		},
 		expected: []testutil.Matcher{
 			newCreateIndexMatcher().
 				withName("env-x_20010203040506").
-				withIndexSet("x").
 				withDefinition("{}"),
 			newReindexMatcher().
 				withFrom("env-x").
@@ -75,15 +72,84 @@ var indexSetTestCases = []PlanTestCase{
 				withMaxDocs(-1),
 			newUpdateAliasMatcher().
 				withName("env-x").
-				withNewIndex("env-x_20010203040506").
-				withOldIndices([]string{"old"}),
+				withIndexToAdd("env-x_20010203040506").
+				withIndicesToRemove([]string{"old"}),
+			newWriteChangelogEntryMatcher(),
+		},
+	},
+	&indexSetTestCase{
+		desc:    "create static index set",
+		envName: "env",
+		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
+		setup: func(setup Setup) {
+			setup.Apply(
+				&createIndex{
+					name:       "common-idx",
+					definition: "{}",
+				},
+				&createAlias{
+					name:  "other-idx",
+					index: "common-idx",
+				},
+			)
+		},
+		indexSet: IndexSetSpec{
+			Name:    "x",
+			Content: "",
+			Meta: schema.IndexSetMeta{
+				Index: "common-idx",
+			},
+		},
+		expected: []testutil.Matcher{
+			newCreateAliasMatcher().
+				withName("env-x").
+				withIndex("common-idx"),
 			newWriteChangelogEntryMatcher().
 				withResourceType("index_set").
 				withResourceIdentifier("x").
-				withFinalName("env-x_20010203040506").
+				withFinalName("common-idx").
 				withEnvName("env").
-				withDefinition("{}").
-				withMeta("{\"Index\":\"\",\"Prototype\":{\"Disabled\":false,\"MaxDocs\":0},\"Reindex\":{\"Pipeline\":\"\"}}"),
+				withDefinition("").
+				withMeta("{\"Index\":\"common-idx\",\"Prototype\":{\"Disabled\":false,\"MaxDocs\":0},\"Reindex\":{\"Pipeline\":\"\"}}"),
+		},
+	},
+	&indexSetTestCase{
+		desc:    "update static index set",
+		envName: "env",
+		clock:   testutil.NewStaticClock("2001-02-03T04:05:06Z"),
+		setup: func(setup Setup) {
+			setup.Apply(
+				&createIndex{
+					name:       "common-idx",
+					definition: "{}",
+				},
+				&createIndex{
+					name:       "common2-idx",
+					definition: "{}",
+				},
+				&createAlias{
+					name:  "other-idx",
+					index: "common-idx",
+				},
+				&createAlias{
+					name:  "env-idx",
+					index: "common-idx",
+				},
+			)
+		},
+		indexSet: IndexSetSpec{
+			Name:    "idx",
+			Content: "",
+			Meta: schema.IndexSetMeta{
+				Index: "common2-idx",
+			},
+		},
+		expected: []testutil.Matcher{
+			newUpdateAliasMatcher().
+				withName("env-idx").
+				withIndexToAdd("common2-idx").
+				withIndicesToRemove([]string{"common-idx"}),
+			newWriteChangelogEntryMatcher(),
 		},
 	},
 }
@@ -91,9 +157,9 @@ var indexSetTestCases = []PlanTestCase{
 type indexSetTestCase struct {
 	desc     string
 	envName  string
-	indexSet IndexSetSpec
 	clock    util.Clock
 	setup    func(Setup)
+	indexSet IndexSetSpec
 	expected []testutil.Matcher
 
 	// temp file containing index set resource definition

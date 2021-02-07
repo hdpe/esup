@@ -12,17 +12,11 @@ func newCreateIndexMatcher() *createIndexMatcher {
 
 type createIndexMatcher struct {
 	name       *string
-	indexSet   *string
 	definition *string
 }
 
 func (m *createIndexMatcher) withName(name string) *createIndexMatcher {
 	m.name = &name
-	return m
-}
-
-func (m *createIndexMatcher) withIndexSet(indexSet string) *createIndexMatcher {
-	m.indexSet = &indexSet
 	return m
 }
 
@@ -37,19 +31,13 @@ func (m *createIndexMatcher) Match(actual interface{}) testutil.MatchResult {
 	a, ok := actual.(*createIndex)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, createIndex{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &createIndex{}))
 		return r
 	}
 
 	if m.name != nil {
 		if got, want := a.name, *(m.name); got != want {
 			r.Reject(fmt.Sprintf("got name %q, want %q", got, want))
-		}
-	}
-
-	if m.indexSet != nil {
-		if got, want := a.indexSet, *(m.indexSet); got != want {
-			r.Reject(fmt.Sprintf("got index set %q, want %q", got, want))
 		}
 	}
 
@@ -99,7 +87,7 @@ func (m *reindexMatcher) Match(actual interface{}) testutil.MatchResult {
 	a, ok := actual.(*reindex)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, createAlias{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &reindex{}))
 		return r
 	}
 
@@ -155,7 +143,7 @@ func (m *createAliasMatcher) Match(actual interface{}) testutil.MatchResult {
 	a, ok := actual.(*createAlias)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, createAlias{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &createAlias{}))
 		return r
 	}
 
@@ -179,9 +167,9 @@ func newUpdateAliasMatcher() *updateAliasMatcher {
 }
 
 type updateAliasMatcher struct {
-	name       *string
-	newIndex   *string
-	oldIndices []string
+	name            *string
+	indexToAdd      *string
+	indicesToRemove []string
 }
 
 func (m *updateAliasMatcher) withName(name string) *updateAliasMatcher {
@@ -189,13 +177,13 @@ func (m *updateAliasMatcher) withName(name string) *updateAliasMatcher {
 	return m
 }
 
-func (m *updateAliasMatcher) withNewIndex(newIndex string) *updateAliasMatcher {
-	m.newIndex = &newIndex
+func (m *updateAliasMatcher) withIndexToAdd(index string) *updateAliasMatcher {
+	m.indexToAdd = &index
 	return m
 }
 
-func (m *updateAliasMatcher) withOldIndices(oldIndices []string) *updateAliasMatcher {
-	m.oldIndices = oldIndices
+func (m *updateAliasMatcher) withIndicesToRemove(indices []string) *updateAliasMatcher {
+	m.indicesToRemove = indices
 	return m
 }
 
@@ -205,7 +193,7 @@ func (m *updateAliasMatcher) Match(actual interface{}) testutil.MatchResult {
 	a, ok := actual.(*updateAlias)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, createAlias{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &updateAlias{}))
 		return r
 	}
 
@@ -215,15 +203,15 @@ func (m *updateAliasMatcher) Match(actual interface{}) testutil.MatchResult {
 		}
 	}
 
-	if m.newIndex != nil {
-		if got, want := a.newIndex, *(m.newIndex); got != want {
+	if m.indexToAdd != nil {
+		if got, want := a.indexToAdd, *(m.indexToAdd); got != want {
 			r.Reject(fmt.Sprintf("got newIndex %q, want %q", got, want))
 		}
 	}
 
-	if m.oldIndices != nil {
-		if got, want := a.oldIndices, m.oldIndices; !reflect.DeepEqual(got, want) {
-			r.Reject(fmt.Sprintf("got oldIndices %q, want %q", got, want))
+	if m.indicesToRemove != nil {
+		if got, want := a.indicesToRemove, m.indicesToRemove; !reflect.DeepEqual(got, want) {
+			r.Reject(fmt.Sprintf("got indicesToRemove %q, want %q", got, want))
 		}
 	}
 
@@ -279,7 +267,7 @@ func (m *writeChangelogEntryMatcher) Match(actual interface{}) testutil.MatchRes
 	a, ok := actual.(*writeChangelogEntry)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, writeChangelogEntry{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &writeChangelogEntry{}))
 		return r
 	}
 
@@ -353,7 +341,7 @@ func (m *indexDocumentMatcher) Match(actual interface{}) testutil.MatchResult {
 	a, ok := actual.(*indexDocument)
 
 	if !ok {
-		r.Reject(fmt.Sprintf("got %T, want %T", actual, writeChangelogEntry{}))
+		r.Reject(fmt.Sprintf("got %T, want %T", actual, &indexDocument{}))
 		return r
 	}
 

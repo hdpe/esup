@@ -6,13 +6,13 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/hdpe.me/esup/es"
 	"github.com/hdpe.me/esup/resource"
+	"strings"
 	"sync"
 	"time"
 )
 
 type createIndex struct {
 	name       string
-	indexSet   string
 	definition string
 }
 
@@ -135,21 +135,33 @@ func (r *createAlias) Execute(es *es.Client, _ *resource.Changelog, _ *Collector
 }
 
 func (r *createAlias) String() string {
-	return fmt.Sprintf("create alias %v -> %v", r.name, r.index)
+	return fmt.Sprintf("create alias %v", aliasString(r.name, r.index))
 }
 
 type updateAlias struct {
-	name       string
-	newIndex   string
-	oldIndices []string
+	name            string
+	indexToAdd      string
+	indicesToRemove []string
 }
 
 func (r *updateAlias) Execute(es *es.Client, _ *resource.Changelog, _ *Collector) error {
-	return es.UpdateAlias(r.name, r.newIndex, r.oldIndices)
+	return es.UpdateAlias(r.name, r.indexToAdd, r.indicesToRemove)
 }
 
 func (r *updateAlias) String() string {
-	return fmt.Sprintf("update alias %v -> %v, removing %v", r.name, r.newIndex, r.oldIndices)
+	str := fmt.Sprintf("update alias %v", aliasString(r.name, r.indexToAdd))
+	removes := make([]string, 0)
+	for _, rm := range r.indicesToRemove {
+		removes = append(removes, aliasString(r.name, rm))
+	}
+	if len(removes) > 0 {
+		str = fmt.Sprintf("%v; removing %v", str, strings.Join(removes, ", "))
+	}
+	return str
+}
+
+func aliasString(aliasName string, indexName string) string {
+	return fmt.Sprintf("%v -> %v", aliasName, indexName)
 }
 
 type putPipeline struct {

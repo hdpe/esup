@@ -151,7 +151,6 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 		if !staticIndex {
 			*plan = append(*plan, &createIndex{
 				name:       indexName,
-				indexSet:   is.IndexSet,
 				definition: newIndexDef,
 			})
 		}
@@ -184,9 +183,9 @@ func (r *Planner) appendIndexSetMutations(plan *[]PlanAction) error {
 
 			if !staticIndex || !reflect.DeepEqual([]string{indexName}, existingIndices) {
 				*plan = append(*plan, &updateAlias{
-					name:       aliasName,
-					newIndex:   indexName,
-					oldIndices: existingIndices,
+					name:            aliasName,
+					indexToAdd:      indexName,
+					indicesToRemove: existingIndices,
 				})
 			}
 		}

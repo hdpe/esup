@@ -141,7 +141,6 @@ func initialIndexSetSetup(name string, definition string, meta schema.IndexSetMe
 		setup.Apply(
 			&createIndex{
 				name:       index,
-				indexSet:   name,
 				definition: "{}",
 			},
 			&createAlias{
